@@ -19,6 +19,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
+-- additional modules
+local Config = require(script:WaitForChild("AutomationConfig"))
+local HUD = require(script:WaitForChild("AutomationHUD"))
+
 local LocalPlayer = Players.LocalPlayer
 
 local Events = ReplicatedStorage:WaitForChild("GameEvents")
@@ -64,8 +68,10 @@ function Automation:PlantSeeds()
     local locFolder = plot.Important:FindFirstChild("Plant_Locations")
     if not locFolder then return end
     for _, spot in ipairs(locFolder:GetChildren()) do
-        Plant_RE:FireServer(spot.Position, "Basic Seed")
-        task.wait(0.15)
+        Plant_RE:FireServer(spot.Position, Config.SeedType)
+        HUD.counters.planted += 1
+        HUD:Update()
+        task.wait(Config.PlantDelay)
     end
 end
 
@@ -78,6 +84,12 @@ function Automation:HandlePrompts(keyword)
         local prompt = plant:FindFirstChildWhichIsA("ProximityPrompt", true)
         if prompt and prompt.Enabled and string.find(prompt.ObjectText, keyword) then
             fireproximityprompt(prompt)
+            if string.find(keyword:lower(), "water") then
+                HUD.counters.watered += 1
+            elseif string.find(keyword:lower(), "harvest") then
+                HUD.counters.harvested += 1
+            end
+            HUD:Update()
             task.wait(0.1)
         end
     end
@@ -191,6 +203,7 @@ end
 
 ---------------------- Initialization ----------------------
 Automation:BuildGUI()
+HUD:Create()
 
 RunService.Heartbeat:Connect(function()
     Automation:Step()
