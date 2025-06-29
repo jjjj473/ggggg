@@ -19,7 +19,7 @@ These commands load the scripts directly from the repository's `codex/create-aut
 
 ## Prison Life Automation
 
-A separate script in this repo offers basic private-server utilities for the Roblox game "Prison Life." It features teleport shortcuts, tool granting, walk speed cycling, a quick-arrest action, an auto-respawn toggle, and an anti-AFK option. The script includes a draggable and collapsible GUI for easy testing.
+A separate script in this repo offers private-server utilities for the Roblox game "Prison Life." It features teleport shortcuts, tool granting, walk speed cycling, a quick-arrest action, an optional patrol loop, an auto-respawn toggle, and an anti-AFK option. The script includes a draggable and collapsible GUI for easy testing.
 
 Load it with:
 

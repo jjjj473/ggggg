@@ -27,6 +27,13 @@ local LOCATIONS = {
     CriminalBase = CFrame.new(-943, 94, 2060),
 }
 
+local PATROL_POINTS = {
+    LOCATIONS.Yard,
+    LOCATIONS.Cafeteria,
+    LOCATIONS.Armory,
+    LOCATIONS.CriminalBase,
+}
+
 local DEFAULT_TOOLS = {"M9", "AK-47", "Remington 870"}
 
 local Automation = {
@@ -37,18 +44,31 @@ local Automation = {
         AntiAFK = false,
         AutoArrest = false,
         AutoGiveTools = false,
+        AutoPatrol = false,
     },
     GUI = {},
     Connections = {},
     SpawnCFrame = nil,
     LastAFK = 0,
+    PatrolPoints = {},
+    PatrolIndex = 1,
+    PatrolDelay = 6,
+    LastPatrol = 0,
 }
+
+Automation.PatrolPoints = PATROL_POINTS
 
 ---------------------- Utility Functions ----------------------
 function Automation:Teleport(cf)
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         char.HumanoidRootPart.CFrame = cf
+    end
+end
+
+function Automation:SetStatus(text)
+    if self.GUI.StatusLabel then
+        self.GUI.StatusLabel.Text = "Status: " .. text
     end
 end
 
@@ -130,6 +150,9 @@ function Automation:EnableAutoArrest(state)
     if self.GUI.AutoArrestBtn then
         self.GUI.AutoArrestBtn.Text = "Auto Arrest: " .. (state and "ON" or "OFF")
     end
+    if not state then
+        self:SetStatus("Idle")
+    end
 end
 
 function Automation:EnableAutoGiveTools(state)
@@ -153,6 +176,16 @@ function Automation:EnableAutoGiveTools(state)
     end
 end
 
+function Automation:EnableAutoPatrol(state)
+    self.Toggles.AutoPatrol = state
+    if self.GUI.AutoPatrolBtn then
+        self.GUI.AutoPatrolBtn.Text = "Auto Patrol: " .. (state and "ON" or "OFF")
+    end
+    if not state then
+        self:SetStatus("Idle")
+    end
+end
+
 function Automation:HandleAutoGiveTools(char)
     char = char or LocalPlayer.Character
     if not char then return end
@@ -171,7 +204,20 @@ end
 
 function Automation:HandleAutoArrest()
     if self.Toggles.AutoArrest then
+        self:SetStatus("Arresting")
         self:ArrestNearest()
+    end
+end
+
+function Automation:HandleAutoPatrol()
+    if self.Toggles.AutoPatrol and tick() - self.LastPatrol > self.PatrolDelay then
+        local cf = self.PatrolPoints[self.PatrolIndex]
+        if cf then
+            self:SetStatus("Patrolling")
+            self:Teleport(cf)
+            self.PatrolIndex = self.PatrolIndex % #self.PatrolPoints + 1
+            self.LastPatrol = tick()
+        end
     end
 end
 
@@ -291,6 +337,19 @@ function Automation:BuildGUI()
         self:EnableAutoGiveTools(not self.Toggles.AutoGiveTools)
     end)
 
+    self.GUI.AutoPatrolBtn = self:CreateButton(autoPage, "Auto Patrol: OFF", function()
+        self:EnableAutoPatrol(not self.Toggles.AutoPatrol)
+    end)
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -8, 0, 18)
+    status.Position = UDim2.new(0, 4, 1, -22)
+    status.BackgroundTransparency = 1
+    status.TextColor3 = Color3.new(1,1,1)
+    status.Text = "Status: Idle"
+    status.Parent = panel
+    self.GUI.StatusLabel = status
+
     local hideBtn = Instance.new("TextButton")
     hideBtn.Text = "Close"
     hideBtn.Size = UDim2.new(0, 60, 0, 22)
@@ -321,6 +380,7 @@ Automation:BuildGUI()
 RunService.Heartbeat:Connect(function()
     Automation:HandleAntiAFK()
     Automation:HandleAutoArrest()
+    Automation:HandleAutoPatrol()
 end)
 
 return Automation
