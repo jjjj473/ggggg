@@ -34,4 +34,7 @@ function HUD:Update()
     )
 end
 
+-- expose globally so the main automation script can access it
+getgenv().GrowGardenHUD = HUD
+
 return HUD

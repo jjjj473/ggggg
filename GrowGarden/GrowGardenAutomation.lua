@@ -19,9 +19,33 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
--- additional modules
-local Config = require(script:WaitForChild("AutomationConfig"))
-local HUD = require(script:WaitForChild("AutomationHUD"))
+-- attempt to locate modules if loaded separately; otherwise fetch from GitHub
+local Config = getgenv().GrowGardenConfig
+local HUD = getgenv().GrowGardenHUD
+
+if not Config then
+    local ok, module = pcall(function()
+        return require(script:WaitForChild("AutomationConfig"))
+    end)
+    if ok then
+        Config = module
+    else
+        local base = "https://raw.githubusercontent.com/jjjj473/ggggg/work/GrowGarden/"
+        Config = loadstring(game:HttpGet(base .. "AutomationConfig.lua"))()
+    end
+end
+
+if not HUD then
+    local ok, module = pcall(function()
+        return require(script:WaitForChild("AutomationHUD"))
+    end)
+    if ok then
+        HUD = module
+    else
+        local base = "https://raw.githubusercontent.com/jjjj473/ggggg/work/GrowGarden/"
+        HUD = loadstring(game:HttpGet(base .. "AutomationHUD.lua"))()
+    end
+end
 
 local LocalPlayer = Players.LocalPlayer
 
