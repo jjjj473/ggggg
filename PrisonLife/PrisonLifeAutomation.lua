@@ -27,12 +27,16 @@ local LOCATIONS = {
     CriminalBase = CFrame.new(-943, 94, 2060),
 }
 
+local DEFAULT_TOOLS = {"M9", "AK-47", "Remington 870"}
+
 local Automation = {
     WalkSpeeds = {16, 30, 60},
     WalkIndex = 1,
     Toggles = {
         AutoRespawn = false,
         AntiAFK = false,
+        AutoArrest = false,
+        AutoGiveTools = false,
     },
     GUI = {},
     Connections = {},
@@ -100,7 +104,11 @@ function Automation:EnableAutoRespawn(state)
         local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         self.SpawnCFrame = char:WaitForChild("HumanoidRootPart").CFrame
         self.Connections.Death = char:FindFirstChildOfClass("Humanoid").Died:Connect(function()
-            LocalPlayer.CharacterAdded:Wait():WaitForChild("HumanoidRootPart").CFrame = self.SpawnCFrame
+            local newChar = LocalPlayer.CharacterAdded:Wait()
+            newChar:WaitForChild("HumanoidRootPart").CFrame = self.SpawnCFrame
+            if self.Toggles.AutoGiveTools then
+                self:HandleAutoGiveTools(newChar)
+            end
         end)
     else
         if self.Connections.Death then
@@ -117,6 +125,42 @@ function Automation:EnableAntiAFK(state)
     end
 end
 
+function Automation:EnableAutoArrest(state)
+    self.Toggles.AutoArrest = state
+    if self.GUI.AutoArrestBtn then
+        self.GUI.AutoArrestBtn.Text = "Auto Arrest: " .. (state and "ON" or "OFF")
+    end
+end
+
+function Automation:EnableAutoGiveTools(state)
+    self.Toggles.AutoGiveTools = state
+    if self.GUI.AutoGiveToolsBtn then
+        self.GUI.AutoGiveToolsBtn.Text = "Auto Give Tools: " .. (state and "ON" or "OFF")
+    end
+    if state then
+        self:HandleAutoGiveTools(LocalPlayer.Character)
+        if not self.Connections.CharAdded then
+            self.Connections.CharAdded = LocalPlayer.CharacterAdded:Connect(function(char)
+                char:WaitForChild("HumanoidRootPart")
+                self:HandleAutoGiveTools(char)
+            end)
+        end
+    else
+        if self.Connections.CharAdded then
+            self.Connections.CharAdded:Disconnect()
+            self.Connections.CharAdded = nil
+        end
+    end
+end
+
+function Automation:HandleAutoGiveTools(char)
+    char = char or LocalPlayer.Character
+    if not char then return end
+    for _, tool in ipairs(DEFAULT_TOOLS) do
+        self:GiveTool(tool)
+    end
+end
+
 function Automation:HandleAntiAFK()
     if self.Toggles.AntiAFK and tick() - self.LastAFK > 60 then
         VirtualUser:CaptureController()
@@ -125,14 +169,20 @@ function Automation:HandleAntiAFK()
     end
 end
 
+function Automation:HandleAutoArrest()
+    if self.Toggles.AutoArrest then
+        self:ArrestNearest()
+    end
+end
+
 ---------------------- GUI Construction ----------------------
-function Automation:CreateButton(text, callback)
+function Automation:CreateButton(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -8, 0, 28)
     btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
     btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.Parent = self.GUI.Panel
+    btn.Parent = parent
     btn.MouseButton1Click:Connect(callback)
     return btn
 end
@@ -144,48 +194,110 @@ function Automation:BuildGUI()
     screen.Parent = game:GetService("CoreGui")
 
     local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0, 200, 0, 330)
-    panel.Position = UDim2.new(0, 60, 0.5, -165)
+    panel.Size = UDim2.new(0, 220, 0, 360)
+    panel.Position = UDim2.new(0, 60, 0.5, -180)
     panel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     panel.Active = true
     panel.Draggable = true
     panel.Parent = screen
 
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 4)
-    layout.Parent = panel
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1,0,0,22)
+    topBar.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    topBar.Parent = panel
+
+    local tabs = Instance.new("Frame")
+    tabs.Size = UDim2.new(1, 0, 0, 24)
+    tabs.Position = UDim2.new(0,0,0,22)
+    tabs.BackgroundColor3 = Color3.fromRGB(45,45,45)
+    tabs.Parent = panel
+
+    local actionsBtn = Instance.new("TextButton")
+    actionsBtn.Size = UDim2.new(0.5, 0, 1, 0)
+    actionsBtn.Text = "Actions"
+    actionsBtn.BackgroundColor3 = Color3.fromRGB(55,55,55)
+    actionsBtn.TextColor3 = Color3.new(1,1,1)
+    actionsBtn.Parent = tabs
+
+    local autoBtn = actionsBtn:Clone()
+    autoBtn.Text = "Automation"
+    autoBtn.Position = UDim2.new(0.5, 0, 0, 0)
+    autoBtn.Parent = tabs
+
+    local container = Instance.new("Frame")
+    container.Position = UDim2.new(0,0,0,46)
+    container.Size = UDim2.new(1,0,1,-46)
+    container.BackgroundTransparency = 1
+    container.Parent = panel
+
+    local actionsPage = Instance.new("Frame")
+    actionsPage.Size = UDim2.new(1,0,1,0)
+    actionsPage.BackgroundTransparency = 1
+    actionsPage.Parent = container
+
+    local actionsLayout = Instance.new("UIListLayout")
+    actionsLayout.Padding = UDim.new(0,4)
+    actionsLayout.Parent = actionsPage
+
+    local autoPage = Instance.new("Frame")
+    autoPage.Size = UDim2.new(1,0,1,0)
+    autoPage.BackgroundTransparency = 1
+    autoPage.Visible = false
+    autoPage.Parent = container
+
+    local autoLayout = Instance.new("UIListLayout")
+    autoLayout.Padding = UDim.new(0,4)
+    autoLayout.Parent = autoPage
+
+    local function showPage(p)
+        actionsPage.Visible = (p == "actions")
+        autoPage.Visible = (p == "auto")
+    end
+
+    actionsBtn.MouseButton1Click:Connect(function() showPage("actions") end)
+    autoBtn.MouseButton1Click:Connect(function() showPage("auto") end)
 
     self.GUI.Screen = screen
     self.GUI.Panel = panel
 
-    self:CreateButton("Teleport: Yard", function() self:Teleport(LOCATIONS.Yard) end)
-    self:CreateButton("Teleport: Cafeteria", function() self:Teleport(LOCATIONS.Cafeteria) end)
-    self:CreateButton("Teleport: Armory", function() self:Teleport(LOCATIONS.Armory) end)
-    self:CreateButton("Teleport: Criminal Base", function() self:Teleport(LOCATIONS.CriminalBase) end)
+    -- Actions page buttons
+    self:CreateButton(actionsPage, "Teleport: Yard", function() self:Teleport(LOCATIONS.Yard) end)
+    self:CreateButton(actionsPage, "Teleport: Cafeteria", function() self:Teleport(LOCATIONS.Cafeteria) end)
+    self:CreateButton(actionsPage, "Teleport: Armory", function() self:Teleport(LOCATIONS.Armory) end)
+    self:CreateButton(actionsPage, "Teleport: Criminal Base", function() self:Teleport(LOCATIONS.CriminalBase) end)
 
-    self.GUI.WalkSpeedBtn = self:CreateButton("WalkSpeed: " .. self.WalkSpeeds[self.WalkIndex], function() self:CycleWalkSpeed() end)
+    self.GUI.WalkSpeedBtn = self:CreateButton(actionsPage, "WalkSpeed: " .. self.WalkSpeeds[self.WalkIndex], function() self:CycleWalkSpeed() end)
 
-    self:CreateButton("Give M9", function() self:GiveTool("M9") end)
-    self:CreateButton("Give AK-47", function() self:GiveTool("AK-47") end)
-    self:CreateButton("Give Remington 870", function() self:GiveTool("Remington 870") end)
+    self:CreateButton(actionsPage, "Give M9", function() self:GiveTool("M9") end)
+    self:CreateButton(actionsPage, "Give AK-47", function() self:GiveTool("AK-47") end)
+    self:CreateButton(actionsPage, "Give Remington 870", function() self:GiveTool("Remington 870") end)
 
-    self:CreateButton("Arrest Nearest", function() self:ArrestNearest() end)
+    self:CreateButton(actionsPage, "Arrest Nearest", function() self:ArrestNearest() end)
 
-    self.GUI.AutoRespawnBtn = self:CreateButton("Auto Respawn: OFF", function()
+    -- Automation page toggles
+    self.GUI.AutoRespawnBtn = self:CreateButton(autoPage, "Auto Respawn: OFF", function()
         self:EnableAutoRespawn(not self.Toggles.AutoRespawn)
     end)
 
-    self.GUI.AntiAFKBtn = self:CreateButton("Anti AFK: OFF", function()
+    self.GUI.AntiAFKBtn = self:CreateButton(autoPage, "Anti AFK: OFF", function()
         self:EnableAntiAFK(not self.Toggles.AntiAFK)
+    end)
+
+    self.GUI.AutoArrestBtn = self:CreateButton(autoPage, "Auto Arrest: OFF", function()
+        self:EnableAutoArrest(not self.Toggles.AutoArrest)
+    end)
+
+    self.GUI.AutoGiveToolsBtn = self:CreateButton(autoPage, "Auto Give Tools: OFF", function()
+        self:EnableAutoGiveTools(not self.Toggles.AutoGiveTools)
     end)
 
     local hideBtn = Instance.new("TextButton")
     hideBtn.Text = "Close"
-    hideBtn.Size = UDim2.new(0, 60, 0, 26)
+    hideBtn.Size = UDim2.new(0, 60, 0, 22)
     hideBtn.Position = UDim2.new(1, 4, 0, 0)
-    hideBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    hideBtn.BackgroundColor3 = Color3.fromRGB(45,45,45)
     hideBtn.TextColor3 = Color3.new(1,1,1)
-    hideBtn.Parent = panel
+    hideBtn.Parent = topBar
     hideBtn.MouseButton1Click:Connect(function()
         panel.Visible = false
     end)
@@ -208,6 +320,7 @@ Automation:BuildGUI()
 
 RunService.Heartbeat:Connect(function()
     Automation:HandleAntiAFK()
+    Automation:HandleAutoArrest()
 end)
 
 return Automation
