@@ -8,6 +8,7 @@
 #include <openssl/sha.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include "input.h"
 
 static GtkWidget *notebook;
 static GtkWidget *web_view;
@@ -862,6 +863,7 @@ int main(int argc, char *argv[]) {
     web_view = create_tab();
 
     global_settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
+    webkit_settings_set_enable_accelerated_compositing(global_settings, FALSE);
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), global_settings);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -898,6 +900,7 @@ int main(int argc, char *argv[]) {
     gtk_container_add(GTK_CONTAINER(window), vbox);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(window, "key-press-event", G_CALLBACK(key_press_cb), NULL);
+    init_input_handlers(window);
 
     gtk_widget_show_all(window);
 

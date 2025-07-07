@@ -5,8 +5,10 @@ TARGET=archbrowser
 
 all: $(TARGET)
 
-$(TARGET): src/main.c
-	$(CC) src/main.c $(CFLAGS) $(LIBS) -o $(TARGET)
+SRCS=src/main.c src/input.c
+
+$(TARGET): $(SRCS)
+	$(CC) $(SRCS) $(CFLAGS) $(LIBS) -o $(TARGET)
 
 clean:
 	rm -f $(TARGET)
