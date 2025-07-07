@@ -4,8 +4,7 @@ This repository contains a minimal web browser written in C using GTK and WebKit
 
 ## Features
 - Ephemeral browsing session (no persistent cookies or cache saved to disk)
-- Blocks network requests for common tracking scripts from Google, Microsoft and
-  TikTok (without blocking access to the main sites)
+- Blocks network requests for common tracking scripts from major platforms without blocking access to the main sites. The default blocklist contains over 80 analytics and advertising domains.
 - Minimal interface with an address bar
 
 ## Building
