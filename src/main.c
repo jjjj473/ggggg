@@ -268,6 +268,146 @@ static void on_pacman_info(GtkWidget *widget, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
+/* --- Pacman updater with rotating tips --- */
+
+static const char *arch_tips[] = {
+    "Tip 1: pacman -Ss searches packages.",
+    "Tip 2: pacman -Ql lists package files.",
+    "Tip 3: Use pacman -Syu to stay updated.",
+    "Tip 4: pacman -Rns removes unused deps.",
+    "Tip 5: Keep your mirrorlist fresh.",
+    "Tip 6: Read pacman.conf for options.",
+    "Tip 7: Use -U to install local files.",
+    "Tip 8: Combine pacman with makepkg.",
+    "Tip 9: pacman -Qi shows package info.",
+    "Tip 10: Use pacman -Qdt to find orphans.",
+    "Tip 11: pacman -F finds files in repos.",
+    "Tip 12: Cache cleanup with pacman -Sc.",
+    "Tip 13: pacman -Qkk verifies packages.",
+    "Tip 14: Use pacman -D --asdeps to mark deps.",
+    "Tip 15: Mirror status at archlinux.org.",
+    "Tip 16: pacman -Qm lists AUR installs.",
+    "Tip 17: PGP keys keep packages secure.",
+    "Tip 18: pacman -Si reveals dependencies.",
+    "Tip 19: Update frequently for security.",
+    "Tip 20: Use -Syu before -S to avoid breakage.",
+    "Tip 21: Query the pacman man page often.",
+    "Tip 22: pacman -Qs searches package names.",
+    "Tip 23: Use pacman -S --needed to skip reinstall.",
+    "Tip 24: Keep root partition large for cache.",
+    "Tip 25: pacman -Qo finds owner of a file.",
+    "Tip 26: pacman -Qet lists explicitly installed.",
+    "Tip 27: Use rankmirrors to speed downloads.",
+    "Tip 28: pacman hooks automate tasks.",
+    "Tip 29: Use pacman -Qen for native packages.",
+    "Tip 30: Keep pacman and keyring up to date.",
+    "Tip 31: pacman -Sg shows package groups.",
+    "Tip 32: pacman -Qk checks install integrity.",
+    "Tip 33: Use -Rdd carefully to force removal.",
+    "Tip 34: pacman -Qi | less for scrolling info.",
+    "Tip 35: Remember to read /var/log/pacman.log.",
+    "Tip 36: pacman -Qs linux lists kernel packages.",
+    "Tip 37: Use pacman -Fy before pacman -Fx.",
+    "Tip 38: pacman -Rsnc removes config files too.",
+    "Tip 39: Use pacman -Syyu to force sync.",
+    "Tip 40: pacman -D --asexplicit marks explicit.",
+    "Tip 41: pacman -Qdtq shows orphaned packages.",
+    "Tip 42: Combine pacman -Ql with grep.",
+    "Tip 43: Use pacman -Dk to check database.",
+    "Tip 44: pacman -Rsu handles dependencies.",
+    "Tip 45: pacman -Qi base gives system basics.",
+    "Tip 46: Keep /etc/pacman.d/gnupg backed up.",
+    "Tip 47: pacman -Qn shows repo packages only.",
+    "Tip 48: Use pacman -Syy if mirrors changed.",
+    "Tip 49: pacman -Qs '^vim' lists Vim packages.",
+    "Tip 50: pacman -Qk package verifies install.",
+    "Tip 51: Use pacman -Ql package | less.",
+    "Tip 52: pacman -Rns $(pacman -Qdtq) cleans orphans.",
+    "Tip 53: pacman -S package --overwrite fixes conflicts.",
+    "Tip 54: pacman -Qkk checks for missing files.",
+    "Tip 55: pacman -S --noconfirm for scripting.",
+    "Tip 56: Use pacman -Qi pacman for version.",
+    "Tip 57: pacman -Qe lists explicit packages.",
+    "Tip 58: Back up /var/cache/pacman/pkg.",
+    "Tip 59: pacman -Syu before reporting bugs.",
+    "Tip 60: The Arch Wiki is your best guide."
+};
+
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *label;
+    char *cmd;
+    gchar *output;
+    GError *error;
+    int tip_idx;
+    guint timer_id;
+    CmdCallback cb;
+    gpointer data;
+} UpdateTask;
+
+static gboolean update_tip(gpointer userdata) {
+    UpdateTask *task = userdata;
+    task->tip_idx = (task->tip_idx + 1) % G_N_ELEMENTS(arch_tips);
+    gtk_label_set_text(GTK_LABEL(task->label), arch_tips[task->tip_idx]);
+    return TRUE;
+}
+
+static gboolean update_finished(gpointer userdata) {
+    UpdateTask *task = userdata;
+    if (task->timer_id)
+        g_source_remove(task->timer_id);
+    gtk_widget_destroy(task->dialog);
+    task->cb(task->output, task->error, task->data);
+    g_free(task->cmd);
+    g_free(task->output);
+    if (task->error)
+        g_error_free(task->error);
+    g_free(task);
+    return FALSE;
+}
+
+static gpointer update_thread(gpointer userdata) {
+    UpdateTask *task = userdata;
+    task->output = sysmgr_run(&sysmgr, task->cmd, &task->error);
+    g_idle_add(update_finished, task);
+    return NULL;
+}
+
+static void run_pacman_update(GtkWidget *window, CmdCallback cb, gpointer data) {
+    GtkWidget *dialog = gtk_dialog_new_with_buttons("Updating System", GTK_WINDOW(window),
+                                                   GTK_DIALOG_MODAL, NULL);
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *spinner = gtk_spinner_new();
+    GtkWidget *label = gtk_label_new(arch_tips[0]);
+    gtk_box_pack_start(GTK_BOX(content), spinner, FALSE, FALSE, 10);
+    gtk_box_pack_start(GTK_BOX(content), label, FALSE, FALSE, 10);
+    gtk_widget_show_all(dialog);
+    gtk_spinner_start(GTK_SPINNER(spinner));
+
+    UpdateTask *task = g_new0(UpdateTask, 1);
+    task->dialog = dialog;
+    task->label = label;
+    task->cmd = g_strdup("pacman -Syu");
+    task->cb = cb;
+    task->data = data;
+    task->tip_idx = 0;
+    task->timer_id = g_timeout_add(2000, update_tip, task);
+    g_thread_new("pacupdate", update_thread, task);
+}
+
+static void pacman_update_finished(gchar *output, GError *err, gpointer user_data) {
+    GtkWidget *window = GTK_WIDGET(user_data);
+    if (err)
+        show_error(window, err->message);
+    else
+        set_status(window, "System updated");
+}
+
+static void on_update_system(GtkWidget *widget, gpointer user_data) {
+    GtkWidget *window = GTK_WIDGET(user_data);
+    run_pacman_update(window, pacman_update_finished, window);
+}
+
 static void on_about(GtkWidget *widget, gpointer user_data) {
     GtkWidget *window = GTK_WIDGET(user_data);
     GtkWidget *dialog = gtk_about_dialog_new();
@@ -331,8 +471,10 @@ int main(int argc, char *argv[]) {
     GtkWidget *tools = gtk_menu_item_new_with_label("Tools");
     GtkWidget *tools_menu = gtk_menu_new();
     GtkWidget *pacman_item = gtk_menu_item_new_with_label("Pacman Info");
+    GtkWidget *update_item = gtk_menu_item_new_with_label("System Update");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(tools), tools_menu);
     gtk_menu_shell_append(GTK_MENU_SHELL(tools_menu), pacman_item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tools_menu), update_item);
 
     GtkWidget *help = gtk_menu_item_new_with_label("Help");
     GtkWidget *help_menu = gtk_menu_new();
@@ -354,10 +496,12 @@ int main(int argc, char *argv[]) {
     GtkWidget *extract_btn = gtk_button_new_with_label("Extract ZIP");
     GtkWidget *create_btn = gtk_button_new_with_label("Create ZIP");
     GtkWidget *pacman_btn = gtk_button_new_with_label("Pacman Info");
+    GtkWidget *update_btn = gtk_button_new_with_label("Update System");
     gtk_box_pack_start(GTK_BOX(toolbar), open_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), extract_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), create_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), pacman_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), update_btn, FALSE, FALSE, 0);
 
     GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
     gtk_box_pack_start(GTK_BOX(vbox), scrolled, TRUE, TRUE, 0);
@@ -386,10 +530,12 @@ int main(int argc, char *argv[]) {
     g_signal_connect(extract_btn, "clicked", G_CALLBACK(on_extract_zip), window);
     g_signal_connect(create_btn, "clicked", G_CALLBACK(on_create_zip), window);
     g_signal_connect(pacman_btn, "clicked", G_CALLBACK(on_pacman_info), window);
+    g_signal_connect(update_btn, "clicked", G_CALLBACK(on_update_system), window);
     g_signal_connect(open_item, "activate", G_CALLBACK(on_open_zip), window);
     g_signal_connect(extract_item, "activate", G_CALLBACK(on_extract_zip), window);
     g_signal_connect(create_item, "activate", G_CALLBACK(on_create_zip), window);
     g_signal_connect(pacman_item, "activate", G_CALLBACK(on_pacman_info), window);
+    g_signal_connect(update_item, "activate", G_CALLBACK(on_update_system), window);
     g_signal_connect(about_item, "activate", G_CALLBACK(on_about), window);
     g_signal_connect(website_item, "activate", G_CALLBACK(on_show_website), window);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);

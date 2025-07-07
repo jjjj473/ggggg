@@ -57,3 +57,9 @@ operation is in progress.
 An offline help website is included in `site/index.html`. Open it from the `Help` menu
 or load it manually in a browser to read more ArchZip branding and usage notes.
 
+### System update tips
+
+Select **System Update** from the Tools menu or the toolbar button to run `pacman -Syu`.
+While the update runs, a spinner dialog cycles through 60 helpful tips for Arch
+Linux users so you can learn more about pacman.
+
