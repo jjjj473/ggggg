@@ -2,7 +2,7 @@
 #include <webkit2/webkit2.h>
 #include <gdk/gdkkeysyms.h>
 
-static GtkWidget *g_view = NULL;
+static WebKitWebView *g_view = NULL;
 static GtkWidget *g_entry = NULL;
 
 static gboolean handle_key(GtkWidget *widget, GdkEventKey *event, gpointer data) {
@@ -64,7 +64,7 @@ static gboolean handle_scroll(GtkWidget *widget, GdkEventScroll *event, gpointer
     return FALSE;
 }
 
-void init_input_handlers(GtkWidget *widget, GtkWidget *web_view, GtkWidget *url_entry) {
+void init_input_handlers(GtkWidget *widget, WebKitWebView *web_view, GtkWidget *url_entry) {
     g_view = web_view;
     g_entry = url_entry;
     g_signal_connect(widget, "key-press-event", G_CALLBACK(handle_key), NULL);

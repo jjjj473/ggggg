@@ -11,7 +11,7 @@
 #include "sysproc.h"
 
 static GtkWidget *notebook;
-static GtkWidget *web_view;
+static WebKitWebView *web_view;
 static GtkWidget *url_entry;
 static GtkWidget *progress_bar;
 static GPtrArray *network_logs;
