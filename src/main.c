@@ -14,6 +14,22 @@ static GtkWidget *url_entry;
 static GtkWidget *progress_bar;
 static GPtrArray *network_logs;
 
+static char *trim_whitespace(const char *s) {
+    if (!s)
+        return g_strdup("");
+    while (g_ascii_isspace(*s))
+        s++;
+    const char *end = s + strlen(s);
+    while (end > s && g_ascii_isspace(*(end - 1)))
+        end--;
+    return g_strndup(s, end - s);
+}
+
+static gboolean show_startup_home(gpointer data) {
+    load_internal("archbrowser://home");
+    return G_SOURCE_REMOVE;
+}
+
 static void sha256_hex(const char *in, char out[65]) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256((const unsigned char*)in, strlen(in), hash);
@@ -762,22 +778,23 @@ static gboolean decide_policy_cb(WebKitWebView *web_view, WebKitPolicyDecision *
 
 
 static void load_url(GtkEntry *entry, gpointer user_data) {
-    const char *url = gtk_entry_get_text(entry);
-    if (g_str_has_prefix(url, "archbrowser://")) {
-        load_internal(url);
+    char *raw = trim_whitespace(gtk_entry_get_text(entry));
+    if (g_str_has_prefix(raw, "archbrowser://")) {
+        load_internal(raw);
+        g_free(raw);
         return;
     }
     char *full = NULL;
-    if (!g_str_has_prefix(url, "http://") && !g_str_has_prefix(url, "https://"))
-        full = g_strdup_printf("https://%s", url);
+    if (!g_str_has_prefix(raw, "http://") && !g_str_has_prefix(raw, "https://"))
+        full = g_strdup_printf("https://%s", raw);
     else
-        full = g_strdup(url);
-
+        full = g_strdup(raw);
     if (is_valid_uri(full))
         webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web_view), full);
     else
         show_error_page(full, "Invalid URL");
     g_free(full);
+    g_free(raw);
 }
 
 int main(int argc, char *argv[]) {
@@ -836,7 +853,7 @@ int main(int argc, char *argv[]) {
 
     gtk_widget_show_all(window);
 
-    show_home();
+    g_idle_add(show_startup_home, NULL);
 
     gtk_main();
     if (db)

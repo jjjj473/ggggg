@@ -29,7 +29,7 @@ make
 The resulting binary will be named `archbrowser`.
 
 ## Running
-Execute the binary and enter a URL in the address bar. If a URL does not include a protocol, `https://` will be prepended automatically.
+Execute the binary and enter a URL in the address bar. The home page appears shortly after the main window shows. Any leading or trailing spaces in the address bar are ignored. If a URL does not include a protocol, `https://` will be prepended automatically.
 
 ## Notes
 This is a simple example and not a full-featured browser. It demonstrates how to block certain requests for privacy. Feel free to extend it further.
