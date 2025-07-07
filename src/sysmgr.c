@@ -3,6 +3,18 @@
 
 void sysmgr_init(SystemManager *mgr) {
     g_mutex_init(&mgr->lock);
+    mgr->history_pos = 0;
+    for (int i = 0; i < SYSMGR_HISTORY_SIZE; i++) {
+        mgr->history[i] = NULL;
+    }
+}
+
+void sysmgr_clear(SystemManager *mgr) {
+    for (int i = 0; i < SYSMGR_HISTORY_SIZE; i++) {
+        g_free(mgr->history[i]);
+        mgr->history[i] = NULL;
+    }
+    mgr->history_pos = 0;
 }
 
 char *sysmgr_run(SystemManager *mgr, const char *cmd, GError **error) {
@@ -24,6 +36,10 @@ char *sysmgr_run(SystemManager *mgr, const char *cmd, GError **error) {
         g_free(stdout_data);
         stdout_data = NULL;
     }
+    g_free(mgr->history[mgr->history_pos]);
+    mgr->history[mgr->history_pos] = g_strdup(cmd);
+    mgr->history_pos = (mgr->history_pos + 1) % SYSMGR_HISTORY_SIZE;
+
     malloc_trim(0);
     g_mutex_unlock(&mgr->lock);
     return stdout_data;

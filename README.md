@@ -25,7 +25,8 @@ This will produce an executable named `gtkzip`.
 ArchZip now uses a lightweight system manager that runs all zip and pacman
 commands. It serializes command execution and frees unused memory after each
 operation, providing more robust error handling. Any failure is reported in a
-dialog instead of printing to the terminal.
+dialog instead of printing to the terminal. The manager now also keeps a history
+of the last 70 commands executed.
 
 ## Usage
 
