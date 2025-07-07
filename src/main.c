@@ -9,12 +9,19 @@
 #include <archive.h>
 #include <archive_entry.h>
 
+static GtkWidget *notebook;
 static GtkWidget *web_view;
 static GtkWidget *url_entry;
 static GtkWidget *progress_bar;
 static GPtrArray *network_logs;
+static WebKitWebContext *web_context;
+static WebKitSettings *global_settings;
 
 static gboolean load_internal(const char *uri);
+static gboolean decide_policy_cb(WebKitWebView *web_view,
+                                 WebKitPolicyDecision *decision,
+                                 WebKitPolicyDecisionType type,
+                                 gpointer user_data);
 
 static char *trim_whitespace(const char *s) {
     if (!s)
@@ -417,17 +424,13 @@ static void show_downloads(void) {
 }
 
 static void show_settings(void) {
-    GString *html = g_string_new("<html><head>");
-    g_string_append(html, page_style);
-    g_string_append(html, page_script);
-    g_string_append(html, "</head><body><div id='nav' class='nav'>");
-    g_string_append(html, nav_links);
-    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
-    g_string_append(html, "</div><h1>Settings</h1><ul>");
-    g_string_append(html, "<li><a href=\"archbrowser://clear\">Clear all data</a></li>");
-    g_string_append(html, "</ul></body></html>");
-    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://settings");
-    g_string_free(html, TRUE);
+    gchar *contents = NULL;
+    if (g_file_get_contents("data/settings.html", &contents, NULL, NULL)) {
+        webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), contents, "archbrowser://settings");
+        g_free(contents);
+    } else {
+        show_error_page("archbrowser://settings", "Failed to load settings file");
+    }
 }
 
 static void show_clear_page(void) {
@@ -688,6 +691,49 @@ static void home_cb(GtkButton *button, gpointer data) {
     load_internal("archbrowser://home");
 }
 
+static void new_tab_cb(GtkButton *button, gpointer data) {
+    web_view = create_tab();
+    gtk_notebook_set_current_page(GTK_NOTEBOOK(notebook), -1);
+    load_internal("archbrowser://home");
+}
+
+static WebKitWebView* create_tab(void) {
+    GtkWidget *view = webkit_web_view_new_with_context(web_context);
+    if (global_settings)
+        webkit_web_view_set_settings(WEBKIT_WEB_VIEW(view), global_settings);
+    g_signal_connect(view, "decide-policy", G_CALLBACK(decide_policy_cb), NULL);
+    g_signal_connect(view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
+    g_signal_connect(view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
+    g_signal_connect(view, "create", G_CALLBACK(create_web_view_cb), NULL);
+    g_signal_connect(view, "resource-load-started", G_CALLBACK(resource_load_started_cb), NULL);
+    g_signal_connect(view, "notify::estimated-load-progress", G_CALLBACK(progress_changed_cb), NULL);
+
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_container_add(GTK_CONTAINER(scrolled), view);
+
+    int num = gtk_notebook_get_n_pages(GTK_NOTEBOOK(notebook));
+    char *label = g_strdup_printf("Tab %d", num + 1);
+    GtkWidget *tab_label = gtk_label_new(label);
+    g_free(label);
+
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled, tab_label);
+    gtk_widget_show_all(scrolled);
+    return WEBKIT_WEB_VIEW(view);
+}
+
+static void tab_switched_cb(GtkNotebook *nb, GtkWidget *page, guint page_num, gpointer data) {
+    GtkWidget *scrolled = gtk_notebook_get_nth_page(nb, page_num);
+    GtkWidget *view = gtk_bin_get_child(GTK_BIN(scrolled));
+    web_view = view;
+    const char *uri = webkit_web_view_get_uri(WEBKIT_WEB_VIEW(web_view));
+    if (uri)
+        gtk_entry_set_text(GTK_ENTRY(url_entry), uri);
+    else
+        gtk_entry_set_text(GTK_ENTRY(url_entry), "");
+    double p = webkit_web_view_get_estimated_load_progress(WEBKIT_WEB_VIEW(web_view));
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), p);
+}
+
 static void progress_changed_cb(WebKitWebView *view, GParamSpec *pspec, gpointer data) {
     double p = webkit_web_view_get_estimated_load_progress(view);
     gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), p);
@@ -807,19 +853,16 @@ int main(int argc, char *argv[]) {
     init_db();
 
     WebKitWebsiteDataManager *manager = webkit_website_data_manager_new_ephemeral();
-    WebKitWebContext *context = webkit_web_context_new_with_website_data_manager(manager);
-    g_signal_connect(context, "download-started", G_CALLBACK(download_started_cb), NULL);
+    web_context = webkit_web_context_new_with_website_data_manager(manager);
+    g_signal_connect(web_context, "download-started", G_CALLBACK(download_started_cb), NULL);
 
-    web_view = webkit_web_view_new_with_context(context);
-    g_signal_connect(web_view, "decide-policy", G_CALLBACK(decide_policy_cb), NULL);
-    g_signal_connect(web_view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
-    g_signal_connect(web_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
-    g_signal_connect(web_view, "create", G_CALLBACK(create_web_view_cb), NULL);
-    g_signal_connect(web_view, "resource-load-started", G_CALLBACK(resource_load_started_cb), NULL);
-    g_signal_connect(web_view, "notify::estimated-load-progress", G_CALLBACK(progress_changed_cb), NULL);
+    notebook = gtk_notebook_new();
+    g_signal_connect(notebook, "switch-page", G_CALLBACK(tab_switched_cb), NULL);
 
-    WebKitSettings *settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
-    webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), settings);
+    web_view = create_tab();
+
+    global_settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
+    webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), global_settings);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
@@ -830,6 +873,7 @@ int main(int argc, char *argv[]) {
     GtkWidget *forward_btn = gtk_button_new_with_label("Forward");
     GtkWidget *reload_btn = gtk_button_new_with_label("Reload");
     GtkWidget *home_btn = gtk_button_new_with_label("Home");
+    GtkWidget *new_tab_btn = gtk_button_new_with_label("New Tab");
     url_entry = gtk_entry_new();
     progress_bar = gtk_progress_bar_new();
 
@@ -837,17 +881,19 @@ int main(int argc, char *argv[]) {
     g_signal_connect(forward_btn, "clicked", G_CALLBACK(forward_cb), NULL);
     g_signal_connect(reload_btn, "clicked", G_CALLBACK(reload_cb), NULL);
     g_signal_connect(home_btn, "clicked", G_CALLBACK(home_cb), NULL);
+    g_signal_connect(new_tab_btn, "clicked", G_CALLBACK(new_tab_cb), NULL);
     g_signal_connect(url_entry, "activate", G_CALLBACK(load_url), NULL);
 
     gtk_box_pack_start(GTK_BOX(toolbar), back_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), forward_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), reload_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), home_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), new_tab_btn, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(toolbar), url_entry, TRUE, TRUE, 2);
 
     gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), progress_bar, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), web_view, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
     gtk_container_add(GTK_CONTAINER(window), vbox);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
@@ -862,5 +908,9 @@ int main(int argc, char *argv[]) {
         sqlite3_close(db);
     if (network_logs)
         g_ptr_array_free(network_logs, TRUE);
+    if (global_settings)
+        g_object_unref(global_settings);
+    if (web_context)
+        g_object_unref(web_context);
     return 0;
 }
