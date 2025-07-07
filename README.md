@@ -60,6 +60,7 @@ or load it manually in a browser to read more ArchZip branding and usage notes.
 ### System update tips
 
 Select **System Update** from the Tools menu or the toolbar button to run `pacman -Syu`.
-While the update runs, a spinner dialog cycles through 60 helpful tips for Arch
+The updater automatically answers `y` when pacman prompts `[Y/n]` so you don't
+have to babysit the process. While the update runs, a spinner dialog cycles through 60 helpful tips for Arch
 Linux users so you can learn more about pacman.
 

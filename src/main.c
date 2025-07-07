@@ -387,7 +387,8 @@ static void run_pacman_update(GtkWidget *window, CmdCallback cb, gpointer data) 
     UpdateTask *task = g_new0(UpdateTask, 1);
     task->dialog = dialog;
     task->label = label;
-    task->cmd = g_strdup("pacman -Syu");
+    /* automatically answer 'y' when pacman asks to proceed */
+    task->cmd = g_strdup("yes | pacman -Syu");
     task->cb = cb;
     task->data = data;
     task->tip_idx = 0;
