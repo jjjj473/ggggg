@@ -28,8 +28,18 @@ static gchar* run_command(const gchar *cmd) {
     return stdout_str; /* must be freed by caller */
 }
 
+/* helper to update the status bar */
+static void set_status(GtkWidget *window, const char *msg) {
+    GtkWidget *status = g_object_get_data(G_OBJECT(window), "statusbar");
+    if (status) {
+        guint ctx = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(window), "status_ctx"));
+        gtk_statusbar_pop(GTK_STATUSBAR(status), ctx);
+        gtk_statusbar_push(GTK_STATUSBAR(status), ctx, msg);
+    }
+}
+
 /* Callback to open a zip file and display contents */
-static void on_open_zip(GtkButton *button, gpointer user_data) {
+static void on_open_zip(GtkWidget *widget, gpointer user_data) {
     GtkWidget *window = GTK_WIDGET(user_data);
     GtkWidget *dialog = gtk_file_chooser_dialog_new("Open ZIP", GTK_WINDOW(window),
                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
@@ -43,6 +53,7 @@ static void on_open_zip(GtkButton *button, gpointer user_data) {
         GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
         GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
         gtk_text_buffer_set_text(buffer, output, -1);
+        set_status(window, "ZIP contents listed");
         g_free(output);
         g_free(cmd);
         g_free(filename);
@@ -51,7 +62,7 @@ static void on_open_zip(GtkButton *button, gpointer user_data) {
 }
 
 /* Callback to extract selected zip */
-static void on_extract_zip(GtkButton *button, gpointer user_data) {
+static void on_extract_zip(GtkWidget *widget, gpointer user_data) {
     GtkWidget *window = GTK_WIDGET(user_data);
     GtkWidget *dialog = gtk_file_chooser_dialog_new("Select ZIP to Extract", GTK_WINDOW(window),
                                                    GTK_FILE_CHOOSER_ACTION_OPEN,
@@ -72,6 +83,7 @@ static void on_extract_zip(GtkButton *button, gpointer user_data) {
             GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
             GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
             gtk_text_buffer_set_text(buffer, output, -1);
+            set_status(window, "Archive extracted");
             g_free(output);
             g_free(cmd);
             g_free(dest);
@@ -83,7 +95,7 @@ static void on_extract_zip(GtkButton *button, gpointer user_data) {
 }
 
 /* Callback to create zip from folder */
-static void on_create_zip(GtkButton *button, gpointer user_data) {
+static void on_create_zip(GtkWidget *widget, gpointer user_data) {
     GtkWidget *window = GTK_WIDGET(user_data);
     GtkWidget *src_dialog = gtk_file_chooser_dialog_new("Select Folder to ZIP", GTK_WINDOW(window),
                                                       GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
@@ -105,6 +117,7 @@ static void on_create_zip(GtkButton *button, gpointer user_data) {
             GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
             GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
             gtk_text_buffer_set_text(buffer, output, -1);
+            set_status(window, "ZIP file created");
             g_free(output);
             g_free(cmd);
             g_free(zipname);
@@ -116,7 +129,7 @@ static void on_create_zip(GtkButton *button, gpointer user_data) {
 }
 
 /* Callback to query pacman for package information */
-static void on_pacman_info(GtkButton *button, gpointer user_data) {
+static void on_pacman_info(GtkWidget *widget, gpointer user_data) {
     GtkWidget *window = GTK_WIDGET(user_data);
     GtkWidget *dialog = gtk_dialog_new_with_buttons("Pacman Package Info",
                                                    GTK_WINDOW(window),
@@ -136,9 +149,23 @@ static void on_pacman_info(GtkButton *button, gpointer user_data) {
         GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
         GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
         gtk_text_buffer_set_text(buffer, output, -1);
+        set_status(window, "Pacman info retrieved");
         g_free(output);
         g_free(cmd);
     }
+    gtk_widget_destroy(dialog);
+}
+
+static void on_about(GtkWidget *widget, gpointer user_data) {
+    GtkWidget *window = GTK_WIDGET(user_data);
+    GtkWidget *dialog = gtk_about_dialog_new();
+    gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dialog), "ArchZip");
+    gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(dialog),
+        "Archive manager for Arch Linux users");
+    gtk_about_dialog_set_website(GTK_ABOUT_DIALOG(dialog), "https://archlinux.org");
+    gtk_about_dialog_set_logo_icon_name(GTK_ABOUT_DIALOG(dialog), "application-zip");
+    gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(window));
+    gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
 }
 
@@ -149,8 +176,46 @@ int main(int argc, char *argv[]) {
     gtk_window_set_title(GTK_WINDOW(window), "GTK3 Zip Tool");
     gtk_window_set_default_size(GTK_WINDOW(window), 600, 400);
 
+    /* fancy header bar with branding */
+    GtkWidget *header = gtk_header_bar_new();
+    gtk_header_bar_set_title(GTK_HEADER_BAR(header), "ArchZip");
+    gtk_header_bar_set_subtitle(GTK_HEADER_BAR(header), "Arch Linux Zip Manager");
+    gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+    GtkWidget *logo = gtk_image_new_from_icon_name("application-zip", GTK_ICON_SIZE_BUTTON);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(header), logo);
+    gtk_window_set_titlebar(GTK_WINDOW(window), header);
+
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(window), vbox);
+
+    /* menu bar */
+    GtkWidget *menubar = gtk_menu_bar_new();
+    GtkWidget *file = gtk_menu_item_new_with_label("File");
+    GtkWidget *file_menu = gtk_menu_new();
+    GtkWidget *open_item = gtk_menu_item_new_with_label("Open...");
+    GtkWidget *extract_item = gtk_menu_item_new_with_label("Extract...");
+    GtkWidget *create_item = gtk_menu_item_new_with_label("Create...");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(file), file_menu);
+    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), open_item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), extract_item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), create_item);
+
+    GtkWidget *tools = gtk_menu_item_new_with_label("Tools");
+    GtkWidget *tools_menu = gtk_menu_new();
+    GtkWidget *pacman_item = gtk_menu_item_new_with_label("Pacman Info");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(tools), tools_menu);
+    gtk_menu_shell_append(GTK_MENU_SHELL(tools_menu), pacman_item);
+
+    GtkWidget *help = gtk_menu_item_new_with_label("Help");
+    GtkWidget *help_menu = gtk_menu_new();
+    GtkWidget *about_item = gtk_menu_item_new_with_label("About");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(help), help_menu);
+    gtk_menu_shell_append(GTK_MENU_SHELL(help_menu), about_item);
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), file);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), tools);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), help);
+    gtk_box_pack_start(GTK_BOX(vbox), menubar, FALSE, FALSE, 0);
 
     GtkWidget *toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
@@ -177,13 +242,28 @@ int main(int argc, char *argv[]) {
     gtk_widget_set_halign(arch_label, GTK_ALIGN_END);
     gtk_box_pack_start(GTK_BOX(vbox), arch_label, FALSE, FALSE, 0);
 
+    /* status bar */
+    GtkWidget *statusbar = gtk_statusbar_new();
+    guint ctx = gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "app");
+    gtk_box_pack_start(GTK_BOX(vbox), statusbar, FALSE, FALSE, 0);
+
+    g_object_set_data(G_OBJECT(window), "statusbar", statusbar);
+    g_object_set_data(G_OBJECT(window), "status_ctx", GUINT_TO_POINTER(ctx));
+
     g_object_set_data(G_OBJECT(window), "textview", textview);
 
     g_signal_connect(open_btn, "clicked", G_CALLBACK(on_open_zip), window);
     g_signal_connect(extract_btn, "clicked", G_CALLBACK(on_extract_zip), window);
     g_signal_connect(create_btn, "clicked", G_CALLBACK(on_create_zip), window);
     g_signal_connect(pacman_btn, "clicked", G_CALLBACK(on_pacman_info), window);
+    g_signal_connect(open_item, "activate", G_CALLBACK(on_open_zip), window);
+    g_signal_connect(extract_item, "activate", G_CALLBACK(on_extract_zip), window);
+    g_signal_connect(create_item, "activate", G_CALLBACK(on_create_zip), window);
+    g_signal_connect(pacman_item, "activate", G_CALLBACK(on_pacman_info), window);
+    g_signal_connect(about_item, "activate", G_CALLBACK(on_about), window);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    set_status(window, "Ready");
 
     gtk_widget_show_all(window);
     gtk_main();

@@ -28,8 +28,9 @@ Run the application with:
 ./gtkzip
 ```
 
-Use the buttons at the top to open existing zip files, extract them to a folder,
+Use the toolbar or menu bar to open existing zip files, extract them to a folder,
 create new archives from a selected directory, or query package information with pacman.
-
-You'll see a small watermark in the lower-right corner stating this tool is for Arch Linux users.
+The program includes an "About" dialog advertising itself as **ArchZip** and a
+status bar that shows the result of each operation. A small watermark in the
+lower-right corner reminds you this tool targets Arch Linux users.
 
