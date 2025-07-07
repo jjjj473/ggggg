@@ -5,6 +5,9 @@
 #include <glib/gstdio.h>
 #include <gdk/gdkkeysyms.h>
 
+static GtkWidget *web_view;
+static GtkWidget *url_entry;
+
 /*
  * List of known tracking hosts. These are not meant to block entire platforms,
  * only common analytics and advertising domains used by Google, Microsoft and
@@ -310,8 +313,6 @@ static gboolean decide_policy_cb(WebKitWebView *web_view, WebKitPolicyDecision *
     return FALSE;
 }
 
-static GtkWidget *web_view;
-static GtkWidget *url_entry;
 
 static void load_url(GtkEntry *entry, gpointer user_data) {
     const char *url = gtk_entry_get_text(entry);
