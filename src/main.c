@@ -668,6 +668,11 @@ static void close_web_view_cb(WebKitWebView *view, GtkWidget *window) {
     gtk_widget_destroy(window);
 }
 
+static gboolean decide_policy_cb(WebKitWebView *web_view,
+                                 WebKitPolicyDecision *decision,
+                                 WebKitPolicyDecisionType type,
+                                 gpointer user_data);
+
 static WebKitWebView* create_web_view_cb(WebKitWebView *web_view, WebKitNavigationAction *action, gpointer user_data) {
     GtkWidget *popup_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(popup_window), 800, 600);
