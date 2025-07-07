@@ -4,7 +4,6 @@
 #include <time.h>
 #include <glib/gstdio.h>
 #include <gdk/gdkkeysyms.h>
-#include <libsoup/soup.h>
 #include <libxml/parser.h>
 #include <openssl/sha.h>
 #include <archive.h>
@@ -13,7 +12,6 @@
 static GtkWidget *web_view;
 static GtkWidget *url_entry;
 static GPtrArray *network_logs;
-static SoupSession *soup_sess;
 
 static void sha256_hex(const char *in, char out[65]) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -640,7 +638,7 @@ static gboolean key_press_cb(GtkWidget *widget, GdkEventKey *event, gpointer dat
     return FALSE;
 }
 
-static gboolean send_request_cb(WebKitWebContext *context, WebKitURIRequest *request, WebKitURIResponse *response, gpointer user_data) {
+static gboolean send_request_cb(WebKitWebResource *resource, WebKitURIRequest *request, WebKitURIResponse *response, gpointer user_data) {
     const char *uri = webkit_uri_request_get_uri(request);
     if (!uri)
         return FALSE;
@@ -662,6 +660,10 @@ static gboolean send_request_cb(WebKitWebContext *context, WebKitURIRequest *req
     if (network_logs)
         g_ptr_array_add(network_logs, g_strdup(uri));
     return blocked; // TRUE means the request is handled and will not be sent
+}
+
+static void resource_load_started_cb(WebKitWebView *view, WebKitWebResource *resource, WebKitURIRequest *request, gpointer user_data) {
+    g_signal_connect(resource, "send-request", G_CALLBACK(send_request_cb), NULL);
 }
 
 static void close_web_view_cb(WebKitWebView *view, GtkWidget *window) {
@@ -745,13 +747,11 @@ int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
     network_logs = g_ptr_array_new_with_free_func(g_free);
-    soup_sess = soup_session_new();
 
     init_db();
 
     WebKitWebsiteDataManager *manager = webkit_website_data_manager_new_ephemeral();
     WebKitWebContext *context = webkit_web_context_new_with_website_data_manager(manager);
-    g_signal_connect(context, "send-request", G_CALLBACK(send_request_cb), NULL);
     g_signal_connect(context, "download-started", G_CALLBACK(download_started_cb), NULL);
 
     web_view = webkit_web_view_new_with_context(context);
@@ -759,6 +759,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect(web_view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
     g_signal_connect(web_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
     g_signal_connect(web_view, "create", G_CALLBACK(create_web_view_cb), NULL);
+    g_signal_connect(web_view, "resource-load-started", G_CALLBACK(resource_load_started_cb), NULL);
 
     WebKitSettings *settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), settings);
@@ -786,7 +787,5 @@ int main(int argc, char *argv[]) {
         sqlite3_close(db);
     if (network_logs)
         g_ptr_array_free(network_logs, TRUE);
-    if (soup_sess)
-        g_object_unref(soup_sess);
     return 0;
 }

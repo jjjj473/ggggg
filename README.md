@@ -4,20 +4,20 @@ This repository contains a minimal web browser written in C using GTK and WebKit
 
 ## Features
 - Ephemeral browsing session (no persistent cookies or cache saved to disk)
-- Blocks network requests for common tracking scripts from major platforms without blocking access to the main sites. The default blocklist contains about 150 analytics and advertising domains.
+- Blocks network requests for common tracking scripts from major platforms without blocking access to the main sites. The default blocklist contains about 150 analytics and advertising domains. Requests are filtered as resources load so tracking scripts never reach the network.
 - Built‑in pages including a customizable home page, history, downloads, settings, bookmarks, notes and more
 - Basic developer tools enabled (open with F12)
 - Minimal interface with an address bar
 - Custom error pages when URLs fail to load or are invalid
 - Shared CSS and JavaScript on internal pages provide a dark theme toggle
-- Uses GTK, WebKit2GTK, SQLite3, libsoup, libxml2, libarchive and OpenSSL
+- Uses GTK, WebKit2GTK, SQLite3, libxml2, libarchive and OpenSSL
 - Pop-up windows from websites are opened in separate windows so they can easily be closed
 
 ## Building
 Ensure the required dependencies are installed on your Arch system:
 
 ```bash
-sudo pacman -S base-devel gtk3 webkit2gtk sqlite libsoup libxml2 libarchive openssl
+sudo pacman -S base-devel gtk3 webkit2gtk sqlite libxml2 libarchive openssl
 ```
 
 Then build the browser using `make`:
