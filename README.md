@@ -1,17 +1,19 @@
 # Arch Browser
 
-This repository contains a minimal web browser written in C using GTK and WebKit2GTK. It is intended for Arch Linux users who want a lightweight browser with simple domain blocking for improved privacy.
+This repository contains a minimal web browser written in C using GTK and WebKit2GTK. It is intended for Arch Linux users who want a lightweight browser with simple domain blocking for improved privacy. Recent updates add a tiny SQLite database for history and download tracking as well as basic developer tools.
 
 ## Features
 - Ephemeral browsing session (no persistent cookies or cache saved to disk)
 - Blocks network requests for common tracking scripts from major platforms without blocking access to the main sites. The default blocklist contains over 80 analytics and advertising domains.
+- Built‑in pages for viewing browsing history, downloads, and settings
+- Basic developer tools enabled (open with F12)
 - Minimal interface with an address bar
 
 ## Building
 Ensure the required dependencies are installed on your Arch system:
 
 ```bash
-sudo pacman -S base-devel gtk3 webkit2gtk
+sudo pacman -S base-devel gtk3 webkit2gtk sqlite
 ```
 
 Then build the browser using `make`:
@@ -27,3 +29,11 @@ Execute the binary and enter a URL in the address bar. If a URL does not include
 
 ## Notes
 This is a simple example and not a full-featured browser. It demonstrates how to block certain requests for privacy. Feel free to extend it further.
+
+### Built-in Pages
+
+The browser provides a few pages that are rendered internally:
+
+- `archbrowser://history` — view browsing history stored in the SQLite database
+- `archbrowser://downloads` — list completed downloads
+- `archbrowser://settings` — settings page with a link to clear all saved data
