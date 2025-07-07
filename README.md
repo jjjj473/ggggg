@@ -7,7 +7,7 @@ This repository contains a minimal web browser written in C using GTK and WebKit
 - Blocks network requests for common tracking scripts from major platforms without blocking access to the main sites. The default blocklist contains about 150 analytics and advertising domains. Requests are filtered as resources load so tracking scripts never reach the network.
 - Built‑in pages including a customizable home page, history, downloads, settings, bookmarks, notes and more
 - Basic developer tools enabled (open with F12)
-- Minimal interface with an address bar
+- Simple interface with a toolbar containing Back, Forward, Reload and Home buttons plus an address bar and load progress
 - Custom error pages when URLs fail to load or are invalid
 - Shared CSS and JavaScript on internal pages provide a dark theme toggle
 - Uses GTK, WebKit2GTK, SQLite3, libxml2, libarchive and OpenSSL

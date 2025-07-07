@@ -11,6 +11,7 @@
 
 static GtkWidget *web_view;
 static GtkWidget *url_entry;
+static GtkWidget *progress_bar;
 static GPtrArray *network_logs;
 
 static void sha256_hex(const char *in, char out[65]) {
@@ -600,10 +601,17 @@ static gboolean load_internal(const char *uri) {
 }
 
 static void load_changed_cb(WebKitWebView *view, WebKitLoadEvent event, gpointer data) {
-    if (event == WEBKIT_LOAD_FINISHED) {
+    if (event == WEBKIT_LOAD_STARTED) {
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), 0);
+    } else if (event == WEBKIT_LOAD_COMMITTED) {
+        const char *uri = webkit_web_view_get_uri(view);
+        if (uri)
+            gtk_entry_set_text(GTK_ENTRY(url_entry), uri);
+    } else if (event == WEBKIT_LOAD_FINISHED) {
         const char *uri = webkit_web_view_get_uri(view);
         if (uri && g_str_has_prefix(uri, "http"))
             add_history(uri);
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), 1.0);
     }
 }
 
@@ -636,6 +644,29 @@ static gboolean key_press_cb(GtkWidget *widget, GdkEventKey *event, gpointer dat
         return TRUE;
     }
     return FALSE;
+}
+
+static void back_cb(GtkButton *button, gpointer data) {
+    if (webkit_web_view_can_go_back(WEBKIT_WEB_VIEW(web_view)))
+        webkit_web_view_go_back(WEBKIT_WEB_VIEW(web_view));
+}
+
+static void forward_cb(GtkButton *button, gpointer data) {
+    if (webkit_web_view_can_go_forward(WEBKIT_WEB_VIEW(web_view)))
+        webkit_web_view_go_forward(WEBKIT_WEB_VIEW(web_view));
+}
+
+static void reload_cb(GtkButton *button, gpointer data) {
+    webkit_web_view_reload(WEBKIT_WEB_VIEW(web_view));
+}
+
+static void home_cb(GtkButton *button, gpointer data) {
+    load_internal("archbrowser://home");
+}
+
+static void progress_changed_cb(WebKitWebView *view, GParamSpec *pspec, gpointer data) {
+    double p = webkit_web_view_get_estimated_load_progress(view);
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), p);
 }
 
 static gboolean send_request_cb(WebKitWebResource *resource, WebKitURIRequest *request, WebKitURIResponse *response, gpointer user_data) {
@@ -760,6 +791,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect(web_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
     g_signal_connect(web_view, "create", G_CALLBACK(create_web_view_cb), NULL);
     g_signal_connect(web_view, "resource-load-started", G_CALLBACK(resource_load_started_cb), NULL);
+    g_signal_connect(web_view, "notify::estimated-load-progress", G_CALLBACK(progress_changed_cb), NULL);
 
     WebKitSettings *settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), settings);
@@ -768,10 +800,28 @@ int main(int argc, char *argv[]) {
     gtk_window_set_default_size(GTK_WINDOW(window), 1024, 768);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    GtkWidget *toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    GtkWidget *back_btn = gtk_button_new_with_label("Back");
+    GtkWidget *forward_btn = gtk_button_new_with_label("Forward");
+    GtkWidget *reload_btn = gtk_button_new_with_label("Reload");
+    GtkWidget *home_btn = gtk_button_new_with_label("Home");
     url_entry = gtk_entry_new();
+    progress_bar = gtk_progress_bar_new();
+
+    g_signal_connect(back_btn, "clicked", G_CALLBACK(back_cb), NULL);
+    g_signal_connect(forward_btn, "clicked", G_CALLBACK(forward_cb), NULL);
+    g_signal_connect(reload_btn, "clicked", G_CALLBACK(reload_cb), NULL);
+    g_signal_connect(home_btn, "clicked", G_CALLBACK(home_cb), NULL);
     g_signal_connect(url_entry, "activate", G_CALLBACK(load_url), NULL);
 
-    gtk_box_pack_start(GTK_BOX(vbox), url_entry, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), back_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), forward_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), reload_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), home_btn, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(toolbar), url_entry, TRUE, TRUE, 2);
+
+    gtk_box_pack_start(GTK_BOX(vbox), toolbar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), progress_bar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), web_view, TRUE, TRUE, 0);
 
     gtk_container_add(GTK_CONTAINER(window), vbox);
