@@ -9,6 +9,7 @@ This repository contains a minimal web browser written in C using GTK and WebKit
 - Basic developer tools enabled (open with F12)
 - Minimal interface with an address bar
 - Custom error pages when URLs fail to load or are invalid
+- Shared CSS and JavaScript on internal pages provide a dark theme toggle
 
 ## Building
 Ensure the required dependencies are installed on your Arch system:
@@ -40,3 +41,6 @@ The browser provides a few pages that are rendered internally:
 - `archbrowser://downloads` — list completed downloads
 - `archbrowser://settings` — settings page with a link to clear all saved data
 - `archbrowser://about` — information about the browser
+
+Internal pages share a small style sheet and script so the theme preference is
+preserved as you navigate.
