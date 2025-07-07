@@ -11,6 +11,7 @@ This repository contains a minimal web browser written in C using GTK and WebKit
 - Custom error pages when URLs fail to load or are invalid
 - Shared CSS and JavaScript on internal pages provide a dark theme toggle
 - Uses GTK, WebKit2GTK, SQLite3, libsoup, libxml2, libarchive and OpenSSL
+- Pop-up windows from websites are opened in separate windows so they can easily be closed
 
 ## Building
 Ensure the required dependencies are installed on your Arch system:
@@ -47,6 +48,8 @@ The browser provides many pages that are rendered internally:
 - `archbrowser://extensions` — placeholder extension manager
 - `archbrowser://about` — information about the browser
 - `archbrowser://help` — simple help page
+
+Navigation links on the home page use this custom scheme and now load correctly within the browser.
 
 Internal pages share a small style sheet and script so the theme preference is
 preserved as you navigate.

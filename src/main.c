@@ -664,6 +664,27 @@ static gboolean send_request_cb(WebKitWebContext *context, WebKitURIRequest *req
     return blocked; // TRUE means the request is handled and will not be sent
 }
 
+static void close_web_view_cb(WebKitWebView *view, GtkWidget *window) {
+    gtk_widget_destroy(window);
+}
+
+static WebKitWebView* create_web_view_cb(WebKitWebView *web_view, WebKitNavigationAction *action, gpointer user_data) {
+    GtkWidget *popup_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_default_size(GTK_WINDOW(popup_window), 800, 600);
+
+    WebKitWebContext *context = webkit_web_view_get_context(web_view);
+    GtkWidget *new_view = webkit_web_view_new_with_context(context);
+
+    g_signal_connect(new_view, "decide-policy", G_CALLBACK(decide_policy_cb), NULL);
+    g_signal_connect(new_view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
+    g_signal_connect(new_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
+    g_signal_connect(new_view, "close", G_CALLBACK(close_web_view_cb), popup_window);
+
+    gtk_container_add(GTK_CONTAINER(popup_window), new_view);
+    gtk_widget_show_all(popup_window);
+    return WEBKIT_WEB_VIEW(new_view);
+}
+
 static gboolean decide_policy_cb(WebKitWebView *web_view, WebKitPolicyDecision *decision, WebKitPolicyDecisionType type, gpointer user_data) {
     if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
         WebKitNavigationAction *nav = webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
@@ -672,6 +693,13 @@ static gboolean decide_policy_cb(WebKitWebView *web_view, WebKitPolicyDecision *
         if (uri) {
             GUri *guri = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
             if (guri) {
+                const char *scheme = g_uri_get_scheme(guri);
+                if (scheme && g_strcmp0(scheme, "archbrowser") == 0) {
+                    webkit_policy_decision_ignore(decision);
+                    load_internal(uri);
+                    g_uri_unref(guri);
+                    return TRUE;
+                }
                 const char *host = g_uri_get_host(guri);
                 for (int i = 0; blocked_domains[i]; ++i) {
                     if (host && g_str_has_suffix(host, blocked_domains[i])) {
@@ -725,6 +753,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect(web_view, "decide-policy", G_CALLBACK(decide_policy_cb), NULL);
     g_signal_connect(web_view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
     g_signal_connect(web_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
+    g_signal_connect(web_view, "create", G_CALLBACK(create_web_view_cb), NULL);
 
     WebKitSettings *settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), settings);
