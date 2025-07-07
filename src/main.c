@@ -8,6 +8,13 @@
 static GtkWidget *web_view;
 static GtkWidget *url_entry;
 
+static const char *page_style =
+    "<style>body{font-family:sans-serif;margin:20px;}h1{color:#333;}" \
+    "table{border-collapse:collapse;width:100%;margin-bottom:1em;}" \
+    "th,td{padding:4px;border:1px solid #ccc;text-align:left;}" \
+    "a{color:#06c;text-decoration:none;}a:hover{text-decoration:underline;}" \
+    "</style>";
+
 /*
  * List of known tracking hosts. These are not meant to block entire platforms,
  * only common analytics and advertising domains used by Google, Microsoft and
@@ -94,6 +101,76 @@ static const char* blocked_domains[] = {
     "upltv.com",
     "webtrends.com",
     "quantcount.com",
+    "googletagservices.com",
+    "cdn.taboola.com",
+    "tr.outbrain.com",
+    "pixel.outbrain.com",
+    "ads.linkedin.com",
+    "analytics.linkedin.com",
+    "analytics.snapchat.com",
+    "ads.snapchat.com",
+    "adservice.amazon.com",
+    "amazon-adsystem.com",
+    "adrolladvertising.com",
+    "moatads.com",
+    "zedo.com",
+    "exelator.com",
+    "crwdcntrl.net",
+    "switchadhub.com",
+    "imrworldwide.com",
+    "turn.com",
+    "pubmatic.com",
+    "rubiconproject.com",
+    "casalemedia.com",
+    "matomymedia.com",
+    "adcolony.com",
+    "appsflyer.com",
+    "branch.io",
+    "mixpanel.com",
+    "segment.io",
+    "intercom.io",
+    "chartbeat.com",
+    "chartbeat.net",
+    "optimizely.com",
+    "crazyegg.com",
+    "hotjar.com",
+    "marketo.com",
+    "pardot.com",
+    "yandex.ru",
+    "mc.yandex.ru",
+    "yandexadexchange.net",
+    "dmp.tremorhub.com",
+    "audienceconnect.tremorhub.com",
+    "tracking.m6r.eu",
+    "pixel.quantserve.com",
+    "doubleverify.com",
+    "yieldlab.net",
+    "ads.servebom.com",
+    "iadsdk.apple.com",
+    "metrics.apple.com",
+    "app-measurement.com",
+    "fast.appcues.com",
+    "cdn.optimizely.com",
+    "pixel.wp.com",
+    "stats.wp.com",
+    "omtrdc.net",
+    "adobedtm.com",
+    "adnxs.com",
+    "l.doubleclick.net",
+    "m.doubleclick.net",
+    "t.doubleclick.net",
+    "innovid.com",
+    "adserver.org",
+    "advertising.com",
+    "inmobi.com",
+    "adform.com",
+    "trackinghost.io",
+    "bidswitch.net",
+    "adition.com",
+    "flashtalking.com",
+    "bidswitch.com",
+    "adsrvr.com",
+    "agkn.com",
     NULL
 };
 
@@ -154,8 +231,30 @@ static void clear_data(void) {
     sqlite3_exec(db, "DELETE FROM downloads;", NULL, NULL, NULL);
 }
 
+static void show_error_page(const char *uri, const char *message) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append_printf(html,
+        "</head><body><h1>Failed to load</h1><p>%s</p><p>%s</p></body></html>",
+        uri ? uri : "", message ? message : "");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://error");
+    g_string_free(html, TRUE);
+}
+
+static gboolean is_valid_uri(const char *uri) {
+    if (!uri)
+        return FALSE;
+    GUri *guri = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
+    if (!guri)
+        return FALSE;
+    g_uri_unref(guri);
+    return TRUE;
+}
+
 static void show_history(void) {
-    GString *html = g_string_new("<html><body><h1>History</h1><ul>");
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, "</head><body><h1>History</h1><table><tr><th>Time</th><th>URL</th></tr>");
     if (db) {
         sqlite3_stmt *stmt;
         if (sqlite3_prepare_v2(db,
@@ -165,19 +264,22 @@ static void show_history(void) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 const char *u = (const char*)sqlite3_column_text(stmt, 0);
                 const char *ts = (const char*)sqlite3_column_text(stmt, 1);
-                g_string_append_printf(html, "<li>%s - <a href=\"%s\">%s</a></li>",
-                                        ts ? ts : "", u, u);
+                g_string_append_printf(html,
+                        "<tr><td>%s</td><td><a href=\"%s\">%s</a></td></tr>",
+                        ts ? ts : "", u, u);
             }
             sqlite3_finalize(stmt);
         }
     }
-    g_string_append(html, "</ul></body></html>");
+    g_string_append(html, "</table></body></html>");
     webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://history");
     g_string_free(html, TRUE);
 }
 
 static void show_downloads(void) {
-    GString *html = g_string_new("<html><body><h1>Downloads</h1><ul>");
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, "</head><body><h1>Downloads</h1><table><tr><th>Time</th><th>File</th><th>URL</th></tr>");
     if (db) {
         sqlite3_stmt *stmt;
         if (sqlite3_prepare_v2(db,
@@ -189,32 +291,50 @@ static void show_downloads(void) {
                 const char *p = (const char*)sqlite3_column_text(stmt,1);
                 const char *ts = (const char*)sqlite3_column_text(stmt,2);
                 g_string_append_printf(html,
-                    "<li>%s - <a href=\"file://%s\">%s</a> (%s)</li>",
-                    ts ? ts : "", p ? p : "", u, u);
+                    "<tr><td>%s</td><td><a href=\"file://%s\">%s</a></td><td>%s</td></tr>",
+                    ts ? ts : "", p ? p : "", p ? p : "", u);
             }
             sqlite3_finalize(stmt);
         }
     }
-    g_string_append(html, "</ul></body></html>");
+    g_string_append(html, "</table></body></html>");
     webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://downloads");
     g_string_free(html, TRUE);
 }
 
 static void show_settings(void) {
-    const char *html =
-        "<html><body><h1>Settings</h1>"
-        "<p><a href=\"archbrowser://clear\">Clear all data</a></p>"
-        "</body></html>";
-    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html, "archbrowser://settings");
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, "</head><body><h1>Settings</h1><ul>");
+    g_string_append(html, "<li><a href=\"archbrowser://clear\">Clear all data</a></li>");
+    g_string_append(html, "</ul></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://settings");
+    g_string_free(html, TRUE);
 }
 
 static void show_clear_page(void) {
     clear_data();
-    const char *html =
-        "<html><body><h1>Data cleared</h1>"
-        "<p><a href=\"archbrowser://settings\">Back to settings</a></p>"
-        "</body></html>";
-    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html, "archbrowser://clear");
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, "</head><body><h1>Data cleared</h1>");
+    g_string_append(html, "<p><a href=\"archbrowser://settings\">Back to settings</a></p>");
+    g_string_append(html, "</body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://clear");
+    g_string_free(html, TRUE);
+}
+
+static void show_about(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html,
+        "</head><body><h1>About Arch Browser</h1>"
+        "<p>A minimal privacy‑focused browser built for Arch Linux.</p>"
+        "<ul><li><a href=\"archbrowser://history\">History</a></li>"
+        "<li><a href=\"archbrowser://downloads\">Downloads</a></li>"
+        "<li><a href=\"archbrowser://settings\">Settings</a></li></ul>"
+        "</body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://about");
+    g_string_free(html, TRUE);
 }
 
 static gboolean load_internal(const char *uri) {
@@ -230,6 +350,9 @@ static gboolean load_internal(const char *uri) {
     } else if (g_strcmp0(uri, "archbrowser://clear") == 0) {
         show_clear_page();
         return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://about") == 0) {
+        show_about();
+        return TRUE;
     }
     return FALSE;
 }
@@ -240,6 +363,12 @@ static void load_changed_cb(WebKitWebView *view, WebKitLoadEvent event, gpointer
         if (uri && g_str_has_prefix(uri, "http"))
             add_history(uri);
     }
+}
+
+static gboolean load_failed_cb(WebKitWebView *view, WebKitLoadEvent event,
+                                const char *uri, GError *error, gpointer data) {
+    show_error_page(uri, error ? error->message : "Unknown error");
+    return TRUE;
 }
 
 static void download_started_cb(WebKitWebContext *context, WebKitDownload *download, gpointer data) {
@@ -318,13 +447,19 @@ static void load_url(GtkEntry *entry, gpointer user_data) {
     const char *url = gtk_entry_get_text(entry);
     if (g_str_has_prefix(url, "archbrowser://")) {
         load_internal(url);
-    } else if (!g_str_has_prefix(url, "http://") && !g_str_has_prefix(url, "https://")) {
-        char *tmp = g_strdup_printf("https://%s", url);
-        webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web_view), tmp);
-        g_free(tmp);
-    } else {
-        webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web_view), url);
+        return;
     }
+    char *full = NULL;
+    if (!g_str_has_prefix(url, "http://") && !g_str_has_prefix(url, "https://"))
+        full = g_strdup_printf("https://%s", url);
+    else
+        full = g_strdup(url);
+
+    if (is_valid_uri(full))
+        webkit_web_view_load_uri(WEBKIT_WEB_VIEW(web_view), full);
+    else
+        show_error_page(full, "Invalid URL");
+    g_free(full);
 }
 
 int main(int argc, char *argv[]) {
@@ -340,6 +475,7 @@ int main(int argc, char *argv[]) {
     web_view = webkit_web_view_new_with_context(context);
     g_signal_connect(web_view, "decide-policy", G_CALLBACK(decide_policy_cb), NULL);
     g_signal_connect(web_view, "load-changed", G_CALLBACK(load_changed_cb), NULL);
+    g_signal_connect(web_view, "load-failed", G_CALLBACK(load_failed_cb), NULL);
 
     WebKitSettings *settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), settings);
@@ -359,6 +495,8 @@ int main(int argc, char *argv[]) {
     g_signal_connect(window, "key-press-event", G_CALLBACK(key_press_cb), NULL);
 
     gtk_widget_show_all(window);
+
+    show_about();
 
     gtk_main();
     if (db)
