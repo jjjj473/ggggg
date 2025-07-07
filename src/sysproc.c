@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "sysproc.h"
 #include <sys/resource.h>
 #include <sys/mman.h>

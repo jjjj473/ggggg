@@ -18,6 +18,11 @@ static GPtrArray *network_logs;
 static WebKitWebContext *web_context;
 static WebKitSettings *global_settings;
 
+/* Forward declarations for callbacks defined later */
+static WebKitWebView* create_tab(void);
+static WebKitWebView* create_web_view_cb(WebKitWebView *web_view, WebKitNavigationAction *action, gpointer user_data);
+static void resource_load_started_cb(WebKitWebView *view, WebKitWebResource *res, WebKitURIRequest *req, gpointer user_data);
+static void progress_changed_cb(WebKitWebView *view, GParamSpec *pspec, gpointer data);
 static gboolean load_internal(const char *uri);
 static gboolean decide_policy_cb(WebKitWebView *web_view,
                                  WebKitPolicyDecision *decision,
@@ -856,7 +861,11 @@ int main(int argc, char *argv[]) {
     web_view = create_tab();
 
     global_settings = webkit_settings_new_with_settings("enable-developer-extras", TRUE, NULL);
+#if defined(WEBKIT_CHECK_VERSION) && WEBKIT_CHECK_VERSION(2,38,0)
+    webkit_settings_set_enable_accelerated_2d_canvas(global_settings, FALSE);
+#else
     webkit_settings_set_enable_accelerated_compositing(global_settings, FALSE);
+#endif
     webkit_web_view_set_settings(WEBKIT_WEB_VIEW(web_view), global_settings);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
