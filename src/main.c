@@ -4,9 +4,24 @@
 #include <time.h>
 #include <glib/gstdio.h>
 #include <gdk/gdkkeysyms.h>
+#include <libsoup/soup.h>
+#include <libxml/parser.h>
+#include <openssl/sha.h>
+#include <archive.h>
+#include <archive_entry.h>
 
 static GtkWidget *web_view;
 static GtkWidget *url_entry;
+static GPtrArray *network_logs;
+static SoupSession *soup_sess;
+
+static void sha256_hex(const char *in, char out[65]) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)in, strlen(in), hash);
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+        sprintf(out + i*2, "%02x", hash[i]);
+    out[64] = '\0';
+}
 
 static const char *page_style =
     "<style>\n"
@@ -33,6 +48,18 @@ static const char *page_script =
     "}\n"
     "document.addEventListener('DOMContentLoaded',init);\n"
     "</script>";
+
+static const char *nav_links =
+    "<a href=\"archbrowser://home\">Home</a>"
+    "<a href=\"archbrowser://history\">History</a>"
+    "<a href=\"archbrowser://downloads\">Downloads</a>"
+    "<a href=\"archbrowser://bookmarks\">Bookmarks</a>"
+    "<a href=\"archbrowser://notes\">Notes</a>"
+    "<a href=\"archbrowser://network\">Network</a>"
+    "<a href=\"archbrowser://settings\">Settings</a>"
+    "<a href=\"archbrowser://extensions\">Extensions</a>"
+    "<a href=\"archbrowser://about\">About</a>"
+    "<a href=\"archbrowser://help\">Help</a>";
 
 /*
  * List of known tracking hosts. These are not meant to block entire platforms,
@@ -214,6 +241,18 @@ static void init_db(void) {
         "path TEXT," \
         "downloaded_at INTEGER NOT NULL);",
         NULL, NULL, NULL);
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS bookmarks(" \
+        "id INTEGER PRIMARY KEY AUTOINCREMENT," \
+        "title TEXT," \
+        "url TEXT NOT NULL);",
+        NULL, NULL, NULL);
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS notes(" \
+        "id INTEGER PRIMARY KEY AUTOINCREMENT," \
+        "content TEXT," \
+        "created_at INTEGER NOT NULL);",
+        NULL, NULL, NULL);
 }
 
 static void add_history(const char *url) {
@@ -243,11 +282,42 @@ static void add_download(const char *url, const char *path) {
     }
 }
 
+static void add_bookmark(const char *title, const char *url) {
+    if (!db || !url)
+        return;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db,
+            "INSERT INTO bookmarks(title, url) VALUES (?, ?)",
+            -1, &stmt, NULL) == SQLITE_OK) {
+        char hash[65];
+        sha256_hex(url, hash);
+        sqlite3_bind_text(stmt, 1, title ? title : hash, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, url, -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
+}
+
+static void add_note(const char *content) {
+    if (!db || !content)
+        return;
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db,
+            "INSERT INTO notes(content, created_at) VALUES (?, strftime('%s','now'))",
+            -1, &stmt, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, content, -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
+}
+
 static void clear_data(void) {
     if (!db)
         return;
     sqlite3_exec(db, "DELETE FROM history;", NULL, NULL, NULL);
     sqlite3_exec(db, "DELETE FROM downloads;", NULL, NULL, NULL);
+    sqlite3_exec(db, "DELETE FROM bookmarks;", NULL, NULL, NULL);
+    sqlite3_exec(db, "DELETE FROM notes;", NULL, NULL, NULL);
 }
 
 static void show_error_page(const char *uri, const char *message) {
@@ -275,13 +345,8 @@ static void show_history(void) {
     g_string_append(html, page_style);
     g_string_append(html, page_script);
     g_string_append(html, "</head><body><div id='nav' class='nav'>");
-    g_string_append(html,
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
-        "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
     g_string_append(html, "</div><h1>History</h1><table><tr><th>Time</th><th>URL</th></tr>");
     if (db) {
         sqlite3_stmt *stmt;
@@ -309,13 +374,8 @@ static void show_downloads(void) {
     g_string_append(html, page_style);
     g_string_append(html, page_script);
     g_string_append(html, "</head><body><div id='nav' class='nav'>");
-    g_string_append(html,
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
-        "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
     g_string_append(html, "</div><h1>Downloads</h1><table><tr><th>Time</th><th>File</th><th>URL</th></tr>");
     if (db) {
         sqlite3_stmt *stmt;
@@ -344,13 +404,8 @@ static void show_settings(void) {
     g_string_append(html, page_style);
     g_string_append(html, page_script);
     g_string_append(html, "</head><body><div id='nav' class='nav'>");
-    g_string_append(html,
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
-        "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
     g_string_append(html, "</div><h1>Settings</h1><ul>");
     g_string_append(html, "<li><a href=\"archbrowser://clear\">Clear all data</a></li>");
     g_string_append(html, "</ul></body></html>");
@@ -364,13 +419,8 @@ static void show_clear_page(void) {
     g_string_append(html, page_style);
     g_string_append(html, page_script);
     g_string_append(html, "</head><body><div id='nav' class='nav'>");
-    g_string_append(html,
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
-        "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
     g_string_append(html, "</div><h1>Data cleared</h1>");
     g_string_append(html, "<p><a href=\"archbrowser://settings\">Back to settings</a></p>");
     g_string_append(html, "</body></html>");
@@ -385,11 +435,9 @@ static void show_home(void) {
     g_string_append(html,
         "</head><body>"
         "<div id='nav' class='nav'>"
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
+        );
+    g_string_append(html, nav_links);
+    g_string_append(html,
         "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>"
         "</div>"
         "<h1>Welcome to Arch Browser</h1>"
@@ -411,18 +459,106 @@ static void show_about(void) {
     g_string_append(html, page_script);
     g_string_append(html,
         "</head><body>"
-        "<div id='nav' class='nav'>"
-        "<a href=\"archbrowser://home\">Home</a>"
-        "<a href=\"archbrowser://history\">History</a>"
-        "<a href=\"archbrowser://downloads\">Downloads</a>"
-        "<a href=\"archbrowser://settings\">Settings</a>"
-        "<a href=\"archbrowser://about\">About</a>"
+        "<div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html,
         "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>"
         "</div>"
         "<h1>About Arch Browser</h1>"
         "<p>A minimal privacy‑focused browser built for Arch Linux.</p>"
         "</body></html>");
     webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://about");
+    g_string_free(html, TRUE);
+}
+
+static void show_bookmarks(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, page_script);
+    g_string_append(html, "</head><body><div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, "</div><h1>Bookmarks</h1><ul>");
+    if (db) {
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(db, "SELECT title,url FROM bookmarks", -1, &stmt, NULL) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char *title = (const char*)sqlite3_column_text(stmt,0);
+                const char *url = (const char*)sqlite3_column_text(stmt,1);
+                g_string_append_printf(html, "<li><a href=\"%s\">%s</a></li>", url, title ? title : url);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+    g_string_append(html, "</ul></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://bookmarks");
+    g_string_free(html, TRUE);
+}
+
+static void show_notes(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, page_script);
+    g_string_append(html, "</head><body><div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, "</div><h1>Notes</h1><ul>");
+    if (db) {
+        sqlite3_stmt *stmt;
+        if (sqlite3_prepare_v2(db, "SELECT content, datetime(created_at,'unixepoch','localtime') FROM notes ORDER BY created_at DESC", -1, &stmt, NULL) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char *content = (const char*)sqlite3_column_text(stmt,0);
+                const char *ts = (const char*)sqlite3_column_text(stmt,1);
+                g_string_append_printf(html, "<li>[%s] %s</li>", ts ? ts : "", content ? content : "");
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+    g_string_append(html, "</ul></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://notes");
+    g_string_free(html, TRUE);
+}
+
+static void show_network(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, page_script);
+    g_string_append(html, "</head><body><div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, "</div><h1>Network Log</h1><ul>");
+    if (network_logs) {
+        for (guint i = 0; i < network_logs->len; i++) {
+            char *u = g_ptr_array_index(network_logs, i);
+            g_string_append_printf(html, "<li>%s</li>", u);
+        }
+    }
+    g_string_append(html, "</ul></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://network");
+    g_string_free(html, TRUE);
+}
+
+static void show_extensions(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, page_script);
+    g_string_append(html, "</head><body><div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, "</div><h1>Extensions</h1><p>Extension system placeholder.</p></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://extensions");
+    g_string_free(html, TRUE);
+}
+
+static void show_help(void) {
+    GString *html = g_string_new("<html><head>");
+    g_string_append(html, page_style);
+    g_string_append(html, page_script);
+    g_string_append(html, "</head><body><div id='nav' class='nav'>");
+    g_string_append(html, nav_links);
+    g_string_append(html, "<button onclick=\"setTheme(document.body.className!=='dark')\">Toggle Theme</button>");
+    g_string_append(html, "</div><h1>Help</h1><p>Use the address bar to navigate. Built-in pages start with archbrowser://</p></body></html>");
+    webkit_web_view_load_html(WEBKIT_WEB_VIEW(web_view), html->str, "archbrowser://help");
     g_string_free(html, TRUE);
 }
 
@@ -442,6 +578,21 @@ static gboolean load_internal(const char *uri) {
         return TRUE;
     } else if (g_strcmp0(uri, "archbrowser://clear") == 0) {
         show_clear_page();
+        return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://bookmarks") == 0) {
+        show_bookmarks();
+        return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://notes") == 0) {
+        show_notes();
+        return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://network") == 0) {
+        show_network();
+        return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://extensions") == 0) {
+        show_extensions();
+        return TRUE;
+    } else if (g_strcmp0(uri, "archbrowser://help") == 0) {
+        show_help();
         return TRUE;
     } else if (g_strcmp0(uri, "archbrowser://about") == 0) {
         show_about();
@@ -508,6 +659,8 @@ static gboolean send_request_cb(WebKitWebContext *context, WebKitURIRequest *req
         }
     }
     g_uri_unref(guri);
+    if (network_logs)
+        g_ptr_array_add(network_logs, g_strdup(uri));
     return blocked; // TRUE means the request is handled and will not be sent
 }
 
@@ -558,6 +711,9 @@ static void load_url(GtkEntry *entry, gpointer user_data) {
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
+    network_logs = g_ptr_array_new_with_free_func(g_free);
+    soup_sess = soup_session_new();
+
     init_db();
 
     WebKitWebsiteDataManager *manager = webkit_website_data_manager_new_ephemeral();
@@ -594,5 +750,9 @@ int main(int argc, char *argv[]) {
     gtk_main();
     if (db)
         sqlite3_close(db);
+    if (network_logs)
+        g_ptr_array_free(network_logs, TRUE);
+    if (soup_sess)
+        g_object_unref(soup_sess);
     return 0;
 }
