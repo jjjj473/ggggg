@@ -561,39 +561,45 @@ static void show_help(void) {
     g_string_free(html, TRUE);
 }
 
+static gboolean match_page(const char *uri, const char *page)
+{
+    size_t n = strlen(page);
+    return g_str_has_prefix(uri, page) &&
+           (uri[n] == '\0' || uri[n] == '/' || uri[n] == '?');
+}
+
 static gboolean load_internal(const char *uri) {
-    if (g_strcmp0(uri, "archbrowser://home") == 0) {
+    if (match_page(uri, "archbrowser://home")) {
         show_home();
         return TRUE;
-    } else 
-    if (g_strcmp0(uri, "archbrowser://history") == 0) {
+    } else if (match_page(uri, "archbrowser://history")) {
         show_history();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://downloads") == 0) {
+    } else if (match_page(uri, "archbrowser://downloads")) {
         show_downloads();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://settings") == 0) {
+    } else if (match_page(uri, "archbrowser://settings")) {
         show_settings();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://clear") == 0) {
+    } else if (match_page(uri, "archbrowser://clear")) {
         show_clear_page();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://bookmarks") == 0) {
+    } else if (match_page(uri, "archbrowser://bookmarks")) {
         show_bookmarks();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://notes") == 0) {
+    } else if (match_page(uri, "archbrowser://notes")) {
         show_notes();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://network") == 0) {
+    } else if (match_page(uri, "archbrowser://network")) {
         show_network();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://extensions") == 0) {
+    } else if (match_page(uri, "archbrowser://extensions")) {
         show_extensions();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://help") == 0) {
+    } else if (match_page(uri, "archbrowser://help")) {
         show_help();
         return TRUE;
-    } else if (g_strcmp0(uri, "archbrowser://about") == 0) {
+    } else if (match_page(uri, "archbrowser://about")) {
         show_about();
         return TRUE;
     }
