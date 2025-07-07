@@ -4,6 +4,46 @@
 #include "sysmgr.h"
 
 static SystemManager sysmgr;
+static char *default_folder = NULL;
+
+/* simple setup screen to choose a default extraction folder */
+static void show_setup_screen(void) {
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "Setup", NULL, GTK_DIALOG_MODAL,
+        "_Start", GTK_RESPONSE_OK,
+        NULL);
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *label = gtk_label_new("Select default extract folder:");
+    GtkWidget *chooser = gtk_file_chooser_button_new(
+        "Folder", GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER);
+    gtk_box_pack_start(GTK_BOX(content), label, FALSE, FALSE, 5);
+    gtk_box_pack_start(GTK_BOX(content), chooser, FALSE, FALSE, 5);
+    gtk_widget_show_all(dialog);
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_OK) {
+        default_folder = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    }
+    gtk_widget_destroy(dialog);
+}
+
+/* quick splash window shown while the application loads */
+static void show_loading_screen(void) {
+    GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_decorated(GTK_WINDOW(win), FALSE);
+    gtk_window_set_position(GTK_WINDOW(win), GTK_WIN_POS_CENTER);
+    gtk_window_set_default_size(GTK_WINDOW(win), 200, 100);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    GtkWidget *label = gtk_label_new("Loading...");
+    GtkWidget *spinner = gtk_spinner_new();
+    gtk_container_add(GTK_CONTAINER(win), box);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 10);
+    gtk_box_pack_start(GTK_BOX(box), spinner, FALSE, FALSE, 10);
+    gtk_widget_show_all(win);
+    gtk_spinner_start(GTK_SPINNER(spinner));
+    while (gtk_events_pending())
+        gtk_main_iteration();
+    g_usleep(1000000);
+    gtk_widget_destroy(win);
+}
 
 static void show_error(GtkWidget *parent, const char *msg) {
     GtkWidget *d = gtk_message_dialog_new(GTK_WINDOW(parent),
@@ -257,6 +297,8 @@ static void on_show_website(GtkWidget *widget, gpointer user_data) {
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
     sysmgr_init(&sysmgr);
+    show_setup_screen();
+    show_loading_screen();
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "GTK3 Zip Tool");
@@ -357,6 +399,7 @@ int main(int argc, char *argv[]) {
     gtk_widget_show_all(window);
     gtk_main();
     sysmgr_clear(&sysmgr);
+    g_free(default_folder);
     return 0;
 }
 

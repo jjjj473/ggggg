@@ -20,6 +20,12 @@ make
 
 This will produce an executable named `gtkzip`.
 
+### Setup and loading
+
+When you start the application a short setup dialog lets you choose a default
+folder for extracted archives. After setup finishes a brief loading splash
+appears before the main window.
+
 ### System manager
 
 ArchZip now uses a lightweight system manager that runs all zip and pacman
