@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>
+body{font-family:sans-serif;margin:20px;}
+.nav{background:#f3f3f3;padding:10px;margin-bottom:20px;}
+.nav a{margin-right:10px;color:#06c;text-decoration:none;}
+.nav a:hover{text-decoration:underline;}
+.btn{padding:4px 8px;border:1px solid #888;background:#eee;cursor:pointer;}
+body.dark{background:#222;color:#ddd;}
+body.dark a{color:#9cf;}
+fieldset{margin-bottom:20px;}
+</style>
+<script>
+function setTheme(dark){
+  document.body.classList.toggle('dark',dark);
+  localStorage.setItem('theme',dark?'dark':'light');
+}
+function init(){
+  if(localStorage.getItem('theme')==='dark')setTheme(true);
+}
+function clearData(){
+  if(confirm('Clear all browsing data?'))
+    location.href='archbrowser://clear';
+}
+function go(u){window.location.href=u;}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</head>
+<body>
+<div class="nav">
+<a href="archbrowser://home">Home</a>
+<a href="archbrowser://history">History</a>
+<a href="archbrowser://downloads">Downloads</a>
+<a href="archbrowser://bookmarks">Bookmarks</a>
+<a href="archbrowser://notes">Notes</a>
+<a href="archbrowser://network">Network</a>
+<a href="archbrowser://extensions">Extensions</a>
+<a href="archbrowser://about">About</a>
+<a href="archbrowser://help">Help</a>
+<button onclick="setTheme(document.body.className!=='dark')">Toggle Theme</button>
+</div>
+<h1>Settings</h1>
+<fieldset>
+<legend>Privacy</legend>
+<label><input type="checkbox" checked disabled> Block tracking domains</label>
+</fieldset>
+<fieldset>
+<legend>Data</legend>
+<button class="btn" onclick="clearData()">Clear All Data</button>
+</fieldset>
+<p>Settings are currently minimal. Additional options can be added here.</p>
+</body>
+</html>
