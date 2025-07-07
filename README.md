@@ -34,3 +34,8 @@ The program includes an "About" dialog advertising itself as **ArchZip** and a
 status bar that shows the result of each operation. A small watermark in the
 lower-right corner reminds you this tool targets Arch Linux users.
 
+### Offline website
+
+An offline help website is included in `site/index.html`. Open it from the `Help` menu
+or load it manually in a browser to read more ArchZip branding and usage notes.
+

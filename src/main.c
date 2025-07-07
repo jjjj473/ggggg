@@ -169,6 +169,19 @@ static void on_about(GtkWidget *widget, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
+/* Callback to open the offline website */
+static void on_show_website(GtkWidget *widget, gpointer user_data) {
+    GtkWidget *window = GTK_WIDGET(user_data);
+    char *path = g_build_filename(g_get_current_dir(), "site", "index.html", NULL);
+    char *uri = g_filename_to_uri(path, NULL, NULL);
+    if (uri) {
+        gtk_show_uri_on_window(GTK_WINDOW(window), uri, GDK_CURRENT_TIME, NULL);
+        g_free(uri);
+        set_status(window, "Opened offline website");
+    }
+    g_free(path);
+}
+
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
@@ -209,8 +222,10 @@ int main(int argc, char *argv[]) {
     GtkWidget *help = gtk_menu_item_new_with_label("Help");
     GtkWidget *help_menu = gtk_menu_new();
     GtkWidget *about_item = gtk_menu_item_new_with_label("About");
+    GtkWidget *website_item = gtk_menu_item_new_with_label("Offline Website");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(help), help_menu);
     gtk_menu_shell_append(GTK_MENU_SHELL(help_menu), about_item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(help_menu), website_item);
 
     gtk_menu_shell_append(GTK_MENU_SHELL(menubar), file);
     gtk_menu_shell_append(GTK_MENU_SHELL(menubar), tools);
@@ -261,6 +276,7 @@ int main(int argc, char *argv[]) {
     g_signal_connect(create_item, "activate", G_CALLBACK(on_create_zip), window);
     g_signal_connect(pacman_item, "activate", G_CALLBACK(on_pacman_info), window);
     g_signal_connect(about_item, "activate", G_CALLBACK(on_about), window);
+    g_signal_connect(website_item, "activate", G_CALLBACK(on_show_website), window);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
     set_status(window, "Ready");
