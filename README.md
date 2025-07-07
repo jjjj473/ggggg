@@ -20,6 +20,13 @@ make
 
 This will produce an executable named `gtkzip`.
 
+### System manager
+
+ArchZip now uses a lightweight system manager that runs all zip and pacman
+commands. It serializes command execution and frees unused memory after each
+operation, providing more robust error handling. Any failure is reported in a
+dialog instead of printing to the terminal.
+
 ## Usage
 
 Run the application with:
@@ -33,6 +40,8 @@ create new archives from a selected directory, or query package information with
 The program includes an "About" dialog advertising itself as **ArchZip** and a
 status bar that shows the result of each operation. A small watermark in the
 lower-right corner reminds you this tool targets Arch Linux users.
+Errors from zip or pacman commands will appear in a message dialog thanks to
+the internal system manager.
 
 ### Offline website
 

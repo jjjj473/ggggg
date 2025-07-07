@@ -1,6 +1,19 @@
 #include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "sysmgr.h"
+
+static SystemManager sysmgr;
+
+static void show_error(GtkWidget *parent, const char *msg) {
+    GtkWidget *d = gtk_message_dialog_new(GTK_WINDOW(parent),
+                                          GTK_DIALOG_MODAL,
+                                          GTK_MESSAGE_ERROR,
+                                          GTK_BUTTONS_CLOSE,
+                                          "%s", msg);
+    gtk_dialog_run(GTK_DIALOG(d));
+    gtk_widget_destroy(d);
+}
 
 /*
  * This simple GUI allows Arch Linux users to inspect zip archives,
@@ -8,25 +21,6 @@
  * information from pacman to showcase basic Arch Linux API usage.
  */
 
-/* Helper to run a command and capture output */
-static gchar* run_command(const gchar *cmd) {
-    gchar *stdout_str = NULL, *stderr_str = NULL;
-    gint exit_status;
-
-    if (!g_spawn_command_line_sync(cmd, &stdout_str, &stderr_str, &exit_status, NULL)) {
-        g_free(stdout_str);
-        g_free(stderr_str);
-        return g_strdup_printf("Failed to run command: %s", cmd);
-    }
-    if (exit_status != 0) {
-        gchar *msg = g_strdup_printf("Error running '%s': %s", cmd, stderr_str);
-        g_free(stdout_str);
-        g_free(stderr_str);
-        return msg;
-    }
-    g_free(stderr_str);
-    return stdout_str; /* must be freed by caller */
-}
 
 /* helper to update the status bar */
 static void set_status(GtkWidget *window, const char *msg) {
@@ -49,11 +43,17 @@ static void on_open_zip(GtkWidget *widget, gpointer user_data) {
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
         char *cmd = g_strdup_printf("unzip -l '%s'", filename);
-        gchar *output = run_command(cmd);
-        GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
-        gtk_text_buffer_set_text(buffer, output, -1);
-        set_status(window, "ZIP contents listed");
+        GError *err = NULL;
+        gchar *output = sysmgr_run(&sysmgr, cmd, &err);
+        if (err) {
+            show_error(window, err->message);
+            g_error_free(err);
+        } else {
+            GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
+            GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
+            gtk_text_buffer_set_text(buffer, output, -1);
+            set_status(window, "ZIP contents listed");
+        }
         g_free(output);
         g_free(cmd);
         g_free(filename);
@@ -79,11 +79,17 @@ static void on_extract_zip(GtkWidget *widget, gpointer user_data) {
         if (gtk_dialog_run(GTK_DIALOG(dest_dialog)) == GTK_RESPONSE_ACCEPT) {
             char *dest = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dest_dialog));
             char *cmd = g_strdup_printf("unzip '%s' -d '%s'", zipname, dest);
-            gchar *output = run_command(cmd);
-            GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
-            GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
-            gtk_text_buffer_set_text(buffer, output, -1);
-            set_status(window, "Archive extracted");
+            GError *err = NULL;
+            gchar *output = sysmgr_run(&sysmgr, cmd, &err);
+            if (err) {
+                show_error(window, err->message);
+                g_error_free(err);
+            } else {
+                GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
+                GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
+                gtk_text_buffer_set_text(buffer, output, -1);
+                set_status(window, "Archive extracted");
+            }
             g_free(output);
             g_free(cmd);
             g_free(dest);
@@ -113,11 +119,17 @@ static void on_create_zip(GtkWidget *widget, gpointer user_data) {
         if (gtk_dialog_run(GTK_DIALOG(save_dialog)) == GTK_RESPONSE_ACCEPT) {
             char *zipname = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(save_dialog));
             char *cmd = g_strdup_printf("zip -r '%s' '%s'", zipname, src_folder);
-            gchar *output = run_command(cmd);
-            GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
-            GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
-            gtk_text_buffer_set_text(buffer, output, -1);
-            set_status(window, "ZIP file created");
+            GError *err = NULL;
+            gchar *output = sysmgr_run(&sysmgr, cmd, &err);
+            if (err) {
+                show_error(window, err->message);
+                g_error_free(err);
+            } else {
+                GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
+                GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
+                gtk_text_buffer_set_text(buffer, output, -1);
+                set_status(window, "ZIP file created");
+            }
             g_free(output);
             g_free(cmd);
             g_free(zipname);
@@ -145,11 +157,17 @@ static void on_pacman_info(GtkWidget *widget, gpointer user_data) {
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         const char *pkg = gtk_entry_get_text(GTK_ENTRY(entry));
         char *cmd = g_strdup_printf("pacman -Si '%s'", pkg);
-        gchar *output = run_command(cmd);
-        GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
-        gtk_text_buffer_set_text(buffer, output, -1);
-        set_status(window, "Pacman info retrieved");
+        GError *err = NULL;
+        gchar *output = sysmgr_run(&sysmgr, cmd, &err);
+        if (err) {
+            show_error(window, err->message);
+            g_error_free(err);
+        } else {
+            GtkWidget *textview = g_object_get_data(G_OBJECT(window), "textview");
+            GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(textview));
+            gtk_text_buffer_set_text(buffer, output, -1);
+            set_status(window, "Pacman info retrieved");
+        }
         g_free(output);
         g_free(cmd);
     }
@@ -184,6 +202,7 @@ static void on_show_website(GtkWidget *widget, gpointer user_data) {
 
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
+    sysmgr_init(&sysmgr);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "GTK3 Zip Tool");

@@ -4,8 +4,10 @@ LDFLAGS=`pkg-config --libs gtk+-3.0`
 
 all: gtkzip
 
-gtkzip: src/main.c
-	$(CC) $(CFLAGS) -o gtkzip src/main.c $(LDFLAGS)
+SRC=src/main.c src/sysmgr.c
+
+gtkzip: $(SRC)
+	$(CC) $(CFLAGS) -o gtkzip $(SRC) $(LDFLAGS)
 
 clean:
 	rm -f gtkzip
