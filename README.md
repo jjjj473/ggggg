@@ -43,6 +43,8 @@ status bar that shows the result of each operation. A small watermark in the
 lower-right corner reminds you this tool targets Arch Linux users.
 Errors from zip or pacman commands will appear in a message dialog thanks to
 the internal system manager.
+While commands execute, a loading spinner dialog appears so you know the
+operation is in progress.
 
 ### Offline website
 
