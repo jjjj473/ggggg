@@ -14,6 +14,8 @@ static GtkWidget *url_entry;
 static GtkWidget *progress_bar;
 static GPtrArray *network_logs;
 
+static gboolean load_internal(const char *uri);
+
 static char *trim_whitespace(const char *s) {
     if (!s)
         return g_strdup("");
