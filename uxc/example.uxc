@@ -1,0 +1,20 @@
+component HelloWorld
+view:
+  div id=main oncreate=mount ref=rootDiv focus scroll:
+    h1: Hello UXC
+    input :model=name persist=userName
+    button onclick.prevent.delay500.log=sayHello :class=btnClass toggle=disabled:isDisabled @textContent=btnLabel: Greet
+    ul data-count=items.length:
+      li each=items: Item
+logic:
+  var name = ''
+  var btnClass = 'primary'
+  var btnLabel = 'Greet'
+  var isDisabled = false
+  var items = ['A','B','C']
+  function sayHello() {
+    alert('Hello ' + name);
+  }
+  function mount(el) {
+    console.log('mounted', el);
+  }
