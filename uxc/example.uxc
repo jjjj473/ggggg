@@ -1,0 +1,11 @@
+component HelloWorld
+view:
+  div id=main:
+    h1: Hello UXC
+    button :title=btnTitle if=showButton onclick=sayHello: Click me
+logic:
+  var btnTitle = 'Click for greeting'
+  var showButton = true
+  function sayHello() {
+    alert('Hello from UXC!');
+  }
