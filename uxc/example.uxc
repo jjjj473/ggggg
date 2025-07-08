@@ -2,10 +2,14 @@ component HelloWorld
 view:
   div id=main:
     h1: Hello UXC
-    button :title=btnTitle if=showButton onclick=sayHello: Click me
+    input :model=name persist=userName
+    button onclick.prevent=sayHello :class=btnClass: Greet
+    ul:
+      li each=items: Item
 logic:
-  var btnTitle = 'Click for greeting'
-  var showButton = true
+  var name = ''
+  var btnClass = 'primary'
+  var items = ['A','B','C']
   function sayHello() {
-    alert('Hello from UXC!');
+    alert('Hello ' + name);
   }

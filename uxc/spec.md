@@ -74,12 +74,37 @@ python uxc/translator.py uxc/example.uxc > output.html
 
 ## Implemented Systems
 
-The prototype translator implements a couple of the planned systems:
+The prototype translator currently supports twenty of the proposed systems:
 
-* **Attribute binding** – specify `:attr=expr` on an element. The generated
-  script sets the attribute value when the page loads.
-* **Conditional rendering** – add `if=condition` to remove the element at load
-  time when the condition evaluates to false.
+1. **Attribute binding** – specify `:attr=expr` on an element to set an
+   attribute when the page loads.
+2. **Two-way data binding** – `:model=var` on inputs keeps a variable and the
+   input value in sync.
+3. **Conditional rendering** – add `if=condition` to remove the element when the
+   condition is false.
+4. **Loop rendering** – `each=item in items` duplicates the element for each
+   array item.
+5. **Event `.prevent` modifier** – prevents default behaviour before calling the
+   handler.
+6. **Event `.stop` modifier** – stops propagation before calling the handler.
+7. **Event `.once` modifier** – listener removed after first invocation.
+8. **Event `.capture` modifier** – listener registered for the capture phase.
+9. **Event `.passive` modifier** – listener marked as passive.
+10. **Event `.throttleN` modifier** – wraps the handler with a throttle helper.
+11. **Event `.debounceN` modifier** – wraps the handler with a debounce helper.
+12. **Style binding** – `:style=expr` sets `style.cssText` dynamically.
+13. **Class binding** – `:class=expr` sets the element class string.
+14. **Text binding** – `:text=expr` assigns `textContent`.
+15. **HTML binding** – `:html=expr` assigns `innerHTML`.
+16. **Show/hide** – `show=condition` toggles `display:none`.
+17. **Fetch helper** – `fetch=url` replaces the element contents with the HTTP
+    response.
+18. **Local storage helper** – `persist=key` binds an input's value to
+    `localStorage`.
+19. **Watchers** – `watch=var:callback` invokes a function when a variable
+    changes.
+20. **Computed properties** – `compute=var:expr` declares a variable computed at
+    load time.
 
 
 ## Built-in Systems and Logic

@@ -4,9 +4,9 @@ This repository contains a prototype language called **UXC**. UXC aims to make
 web UI markup and logic easier to write compared to raw HTML and JavaScript.
 
 See `uxc/spec.md` for the language specification. The specification now
-includes a list of proposed built-in systems and logic features. The
-translator implements a few of these systems, such as simple attribute binding
-and conditional rendering.
+lists many proposed built-in systems. The translator implements about twenty
+of them, including attribute and style binding, two-way `:model` binding,
+conditional and loop rendering, event modifiers and more.
 
 ## Example
 
@@ -15,12 +15,16 @@ component HelloWorld
 view:
   div id=main:
     h1: Hello UXC
-    button :title=btnTitle if=showButton onclick=sayHello: Click me
+    input :model=name persist=userName
+    button onclick.prevent=sayHello :class=btnClass: Greet
+    ul:
+      li each=item in items :text=item
 logic:
-  var btnTitle = 'Click for greeting'
-  var showButton = true
+  var name = ''
+  var btnClass = 'primary'
+  var items = ['A','B','C']
   function sayHello() {
-    alert('Hello from UXC!');
+    alert('Hello ' + name);
   }
 ```
 

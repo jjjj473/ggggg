@@ -1,10 +1,31 @@
 import sys
 from pathlib import Path
 
+UTILITY_FUNCS = """
+function uxcThrottle(fn, delay) {
+  let last = 0;
+  return function(...args) {
+    const now = Date.now();
+    if (now - last >= delay) {
+      last = now;
+      return fn.apply(this, args);
+    }
+  };
+}
+
+function uxcDebounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+"""
 
 def parse_view(lines, start, scripts, counter):
     html = []
     stack = []
+    void_tags = {"input", "img", "br", "hr", "meta", "link"}
     i = start
     while i < len(lines):
         line = lines[i]
@@ -16,8 +37,14 @@ def parse_view(lines, start, scripts, counter):
         indent = len(line) - len(line.lstrip())
         content = line.strip()
         if ':' in content:
-            tag_part, text = content.rsplit(':', 1)
-            text = text.strip()
+            split_pos = content.rfind(': ')
+            if split_pos == -1 and content.endswith(':'):
+                split_pos = len(content) - 1
+            if split_pos != -1:
+                tag_part = content[:split_pos]
+                text = content[split_pos + 1:].strip()
+            else:
+                tag_part, text = content, ''
         else:
             tag_part, text = content, ''
 
@@ -26,21 +53,62 @@ def parse_view(lines, start, scripts, counter):
         attrs = {}
         bind_attrs = []
         cond = None
-
+        style_bind = None
+        class_bind = None
+        text_bind = None
+        html_bind = None
+        model_bind = None
+        show_cond = None
+        each_expr = None
+        fetch_url = None
+        persist_key = None
+        events = []
+        watch_expr = None
+        compute_expr = None
+        
         for token in parts[1:]:
             if token.startswith(':') and '=' in token:
-                # attribute binding :attr=expr
-                a, val = token[1:].split('=', 1)
-                bind_attrs.append((a, val))
+                name, val = token[1:].split('=', 1)
+                if name == 'style':
+                    style_bind = val
+                elif name == 'class':
+                    class_bind = val
+                elif name == 'text':
+                    text_bind = val
+                elif name == 'html':
+                    html_bind = val
+                elif name == 'model':
+                    model_bind = val
+                else:
+                    # generic attribute binding :attr=expr
+                    bind_attrs.append((name, val))
             elif token.startswith('if='):
                 cond = token[3:]
+            elif token.startswith('show='):
+                show_cond = token[5:]
+            elif token.startswith('each='):
+                each_expr = token[5:]
+            elif token.startswith('fetch='):
+                fetch_url = token[6:]
+            elif token.startswith('persist='):
+                persist_key = token[8:]
+            elif token.startswith('watch='):
+                watch_expr = token[6:]
+            elif token.startswith('compute='):
+                compute_expr = token[8:]
+            elif token.startswith('on') and '=' in token:
+                event_part, handler = token.split('=', 1)
+                event_name, *mods = event_part[2:].split('.')
+                events.append((event_name, handler, mods))
             elif '=' in token:
                 k, v = token.split('=', 1)
                 attrs[k] = v
             else:
                 attrs[token] = None
 
-        if (bind_attrs or cond) and 'id' not in attrs:
+        if (bind_attrs or cond or style_bind or class_bind or text_bind or html_bind or
+                model_bind or show_cond or each_expr or fetch_url or persist_key or events or
+                watch_expr or compute_expr) and 'id' not in attrs:
             attrs['id'] = f'uxc{counter[0]}'
             counter[0] += 1
 
@@ -50,22 +118,104 @@ def parse_view(lines, start, scripts, counter):
                 open_tag += f' {k}'
             else:
                 open_tag += f' {k}={v}'
-        open_tag += '>'
         if text:
-            open_tag += text
-            html.append(open_tag + f'</{tag}>')
+            open_tag += f'>{text}</{tag}>'
+            html.append(open_tag)
+        elif tag in void_tags:
+            open_tag += ' />'
+            html.append(open_tag)
         else:
+            open_tag += '>'
             html.append(open_tag)
             stack.append((indent, tag))
+
+        elem_id = attrs.get('id')
 
         if bind_attrs:
             for attr, expr in bind_attrs:
                 scripts.append(
-                    f"document.getElementById('{attrs['id']}').setAttribute('{attr}', {expr});"
+                    f"document.getElementById('{elem_id}').setAttribute('{attr}', {expr});"
                 )
+        if style_bind:
+            scripts.append(
+                f"document.getElementById('{elem_id}').style.cssText = {style_bind};"
+            )
+        if class_bind:
+            scripts.append(
+                f"document.getElementById('{elem_id}').className = {class_bind};"
+            )
+        if text_bind:
+            scripts.append(
+                f"document.getElementById('{elem_id}').textContent = {text_bind};"
+            )
+        if html_bind:
+            scripts.append(
+                f"document.getElementById('{elem_id}').innerHTML = {html_bind};"
+            )
+        if model_bind:
+            scripts.append(
+                f"document.getElementById('{elem_id}').value = {model_bind};"
+            )
+            scripts.append(
+                f"document.getElementById('{elem_id}').addEventListener('input', e => {{ {model_bind} = e.target.value; }});"
+            )
         if cond:
             scripts.append(
-                f"if(!({cond})) document.getElementById('{attrs['id']}').remove();"
+                f"if(!({cond})) document.getElementById('{elem_id}').remove();"
+            )
+        if show_cond:
+            scripts.append(
+                f"if(!({show_cond})) document.getElementById('{elem_id}').style.display='none';"
+            )
+        if fetch_url:
+            scripts.append(
+                f"fetch({fetch_url}).then(r=>r.text()).then(t=>{{document.getElementById('{elem_id}').innerHTML=t;}});"
+            )
+        if persist_key:
+            scripts.append(
+                f"document.getElementById('{elem_id}').value = localStorage.getItem('{persist_key}') || '';"
+            )
+            scripts.append(
+                f"document.getElementById('{elem_id}').addEventListener('input', e => localStorage.setItem('{persist_key}', e.target.value));"
+            )
+        if watch_expr:
+            var_name, cb = watch_expr.split(':',1)
+            scripts.append(
+                f"let __old_{var_name} = {var_name}; setInterval(()=>{{ if(__old_{var_name} !== {var_name}){{ __old_{var_name} = {var_name}; {cb}({var_name}); }} }},50);"
+            )
+        if compute_expr:
+            var_name, expr = compute_expr.split(':',1)
+            scripts.append(
+                f"var {var_name} = {expr};"
+            )
+        for evt, handler, mods in events:
+            handler_code = ''
+            options = []
+            for m in mods:
+                if m == 'prevent':
+                    handler_code += 'event.preventDefault();'
+                elif m == 'stop':
+                    handler_code += 'event.stopPropagation();'
+                elif m == 'once':
+                    options.append('once: true')
+                elif m == 'capture':
+                    options.append('capture: true')
+                elif m == 'passive':
+                    options.append('passive: true')
+                elif m.startswith('throttle'):
+                    delay = m[len('throttle'):]
+                    handler = f"uxcThrottle({handler}, {delay})"
+                elif m.startswith('debounce'):
+                    delay = m[len('debounce'):]
+                    handler = f"uxcDebounce({handler}, {delay})"
+            handler_code += f'{handler}(event);'
+            opt = f", {{ {', '.join(options)} }}" if options else ''
+            scripts.append(
+                f"document.getElementById('{elem_id}').addEventListener('{evt}', function(event){{{handler_code}}}{opt});"
+            )
+        if each_expr:
+            scripts.append(
+                f"(() => {{const tpl=document.getElementById('{elem_id}');const p=tpl.parentNode;tpl.remove();for(const _ of {each_expr}){{const c=tpl.cloneNode(true);p.appendChild(c);}}}})();"
             )
         i += 1
         next_indent = len(lines[i]) - len(lines[i].lstrip()) if i < len(lines) else 0
@@ -107,6 +257,7 @@ def main(path):
         print('<script>')
         if js_lines:
             print('\n'.join(js_lines))
+        print(UTILITY_FUNCS)
         if dynamic_scripts:
             print('\n'.join(dynamic_scripts))
         print('</script>')
