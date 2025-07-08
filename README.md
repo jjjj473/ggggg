@@ -4,9 +4,9 @@ This repository contains a prototype language called **UXC**. UXC aims to make
 web UI markup and logic easier to write compared to raw HTML and JavaScript.
 
 See `uxc/spec.md` for the language specification. The specification now
-lists many proposed built-in systems. The translator implements about twenty
+lists many proposed built-in systems. The translator implements about forty
 of them, including attribute and style binding, two-way `:model` binding,
-conditional and loop rendering, event modifiers and more.
+conditional and loop rendering, event modifiers and many additional helpers.
 
 ## Example
 

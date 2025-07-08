@@ -74,7 +74,7 @@ python uxc/translator.py uxc/example.uxc > output.html
 
 ## Implemented Systems
 
-The prototype translator currently supports twenty of the proposed systems:
+The prototype translator currently supports forty of the proposed systems:
 
 1. **Attribute binding** – specify `:attr=expr` on an element to set an
    attribute when the page loads.
@@ -105,6 +105,26 @@ The prototype translator currently supports twenty of the proposed systems:
     changes.
 20. **Computed properties** – `compute=var:expr` declares a variable computed at
     load time.
+21. **Property binding** – `@prop=expr` assigns a DOM property.
+22. **Value binding** – `:value=expr` sets an element's value.
+23. **Toggle attribute** – `toggle=attr:cond` adds or removes an attribute.
+24. **Hide when** – `hide=cond` hides the element when true.
+25. **Focus** – `focus` focuses the element on creation.
+26. **Blur** – `blur` blurs the element on creation.
+27. **Prepend HTML** – `prepend=expr` inserts HTML at the beginning.
+28. **Append HTML** – `append=expr` inserts HTML at the end.
+29. **Replace HTML** – `replace=expr` sets `innerHTML`.
+30. **Dispatch events** – `dispatch=name` dispatches a custom event.
+31. **On create hook** – `oncreate=fn` calls a function after creation.
+32. **Event `.delayN` modifier** – delays the handler by N milliseconds.
+33. **Event `.log` modifier** – logs the event before the handler.
+34. **Attribute once** – `:attrOnce=name:expr` sets an attribute once.
+35. **Toggle class** – `:toggleClass=cls:cond` toggles a class.
+36. **Append text** – `appendText=expr` adds text inside the element.
+37. **Prepend text** – `prependText=expr` adds text before content.
+38. **Scroll** – `scroll` scrolls the element into view.
+39. **Data binding** – `data-key=expr` assigns a dataset value.
+40. **Element refs** – `ref=name` stores the element in `window[name]`.
 
 
 ## Built-in Systems and Logic
